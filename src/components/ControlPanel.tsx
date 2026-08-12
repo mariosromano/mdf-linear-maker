@@ -3,6 +3,7 @@ import type { LinearParams, LightingPreset, PatternType } from '../engine/types'
 import {
   MATERIALS,
   DEPTH_MODES,
+  IMAGE_STYLES,
   BIT_SIZES,
   BIT_PROFILES,
   CARVE_DEPTHS,
@@ -404,20 +405,34 @@ export default function ControlPanel({
 
             {params.pattern === 'Image Lines' && (
               <>
+                <Segmented
+                  label="Style"
+                  value={params.imageStyle}
+                  options={IMAGE_STYLES}
+                  onChange={(v) => set('imageStyle', v)}
+                />
+                <p className="text-[10.5px] text-[var(--ink-faint)] -mt-2 mb-3.5 leading-relaxed">
+                  {params.imageStyle === 'Depth' && 'Straight lines dive deeper where the image is dark.'}
+                  {params.imageStyle === 'Wave' && 'Constant-depth lines wiggle harder where the image is dark.'}
+                  {params.imageStyle === 'Density' && 'Lines bunch together where the image is dark, like an engraving.'}
+                  {params.imageStyle === 'Dimples' && 'Drill pecks on a staggered grid — deeper and wider where dark.'}
+                </p>
                 <Slider
-                  label="Line Spacing"
+                  label={params.imageStyle === 'Dimples' ? 'Dimple Pitch' : 'Line Spacing'}
                   value={params.spacing}
                   min={1} max={24} step={0.5}
                   format={(v) => `${v}″`}
                   onChange={(v) => set('spacing', v)}
                 />
-                <Slider
-                  label="Angle"
-                  value={params.angle}
-                  min={0} max={180} step={5}
-                  format={(v) => `${v}°`}
-                  onChange={(v) => set('angle', v)}
-                />
+                {params.imageStyle !== 'Dimples' && (
+                  <Slider
+                    label="Angle"
+                    value={params.angle}
+                    min={0} max={180} step={5}
+                    format={(v) => `${v}°`}
+                    onChange={(v) => set('angle', v)}
+                  />
+                )}
               </>
             )}
           </>

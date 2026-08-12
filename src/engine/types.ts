@@ -7,6 +7,7 @@ export type PatternType =
   | 'Image Lines'
   | 'Image Relief';
 export type DepthMode = 'Uniform' | 'Alternating' | 'Gradient' | 'Random';
+export type ImageStyle = 'Depth' | 'Wave' | 'Density' | 'Dimples';
 export type BitSize = '1/4"' | '1/2"';
 export type BitProfile = 'Ball-end' | 'Flat-end';
 export type CarveDepth = '1/8"' | '1/4"' | '3/8"';
@@ -26,6 +27,7 @@ export interface LinearParams {
   imageInvert: boolean;  // false: dark areas carve deepest; true: light areas
   imageSmooth: number;   // 0..10 blur radius (source pixels) before depth mapping
   imageGamma: number;    // 0.4..2.5 depth curve — <1 broadens carving, >1 focuses on darkest areas
+  imageStyle: ImageStyle; // how Image Lines encodes the picture
   bitSize: BitSize;
   bitProfile: BitProfile;
   carveDepth: CarveDepth; // maximum carve depth — depthMode scales per line
@@ -105,6 +107,7 @@ export interface ReliefField {
 /** Depth quantization steps for Image Lines (bounds DXF layer count). */
 export const IMAGE_DEPTH_LEVELS = 12;
 export const DEPTH_MODES: DepthMode[] = ['Uniform', 'Alternating', 'Gradient', 'Random'];
+export const IMAGE_STYLES: ImageStyle[] = ['Depth', 'Wave', 'Density', 'Dimples'];
 export const BIT_SIZES: BitSize[] = ['1/4"', '1/2"'];
 export const BIT_PROFILES: BitProfile[] = ['Ball-end', 'Flat-end'];
 export const CARVE_DEPTHS: CarveDepth[] = ['1/8"', '1/4"', '3/8"'];
@@ -132,6 +135,7 @@ export const DEFAULT_PARAMS: LinearParams = {
   imageInvert: false,
   imageSmooth: 2,
   imageGamma: 1.0,
+  imageStyle: 'Depth',
   bitSize: '1/2"',
   bitProfile: 'Ball-end',
   carveDepth: '1/4"',

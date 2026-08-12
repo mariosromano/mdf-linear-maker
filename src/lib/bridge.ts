@@ -10,6 +10,7 @@ import {
   MATERIALS,
   PATTERNS,
   DEPTH_MODES,
+  IMAGE_STYLES,
   BIT_SIZES,
   BIT_PROFILES,
   CARVE_DEPTHS,
@@ -57,6 +58,9 @@ export function readInitialParams(): LinearParams {
     if (typeof s.seed === 'number') params.seed = Math.floor(s.seed);
     if (typeof s.depthMode === 'string' && (DEPTH_MODES as string[]).includes(s.depthMode)) {
       params.depthMode = s.depthMode as LinearParams['depthMode'];
+    }
+    if (typeof s.imageStyle === 'string' && (IMAGE_STYLES as string[]).includes(s.imageStyle)) {
+      params.imageStyle = s.imageStyle as LinearParams['imageStyle'];
     }
     if (typeof s.bitSize === 'string' && (BIT_SIZES as string[]).includes(s.bitSize)) {
       params.bitSize = s.bitSize as LinearParams['bitSize'];

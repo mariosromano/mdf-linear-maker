@@ -43,10 +43,11 @@ export default function ExportBar({
       pattern.panels,
       pattern.wallW,
       pattern.wallH,
-      CARVE_DEPTH_IN[params.carveDepth]
+      CARVE_DEPTH_IN[params.carveDepth],
+      BIT_SIZE_IN[params.bitSize] / 2
     );
     downloadBlob(dxf, 'mr-linear-wall.dxf', 'application/dxf');
-  }, [pattern, params.carveDepth]);
+  }, [pattern, params.carveDepth, params.bitSize]);
 
   const handleExportSTL = useCallback(() => {
     if ((pattern.edges.length === 0 && !pattern.relief) || stlBusy) return;

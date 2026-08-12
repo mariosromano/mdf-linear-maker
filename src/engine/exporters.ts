@@ -11,7 +11,8 @@ export function buildDXF(
   panels: Panel[],
   wallW: number,
   wallH: number,
-  maxDepthIn: number
+  maxDepthIn: number,
+  bitRadiusIn: number = 0.25
 ): string {
   const hw = wallW / 2, hh = wallH / 2;
 
@@ -54,8 +55,13 @@ export function buildDXF(
   for (const [layer, group] of byDepth) {
     for (const e of group) {
       const [ix0, iy0] = toInches(e.x0, e.y0);
-      const [ix1, iy1] = toInches(e.x1, e.y1);
-      dxf += `0\nLINE\n8\n${layer}\n10\n${ix0}\n20\n${iy0}\n30\n0.0\n11\n${ix1}\n21\n${iy1}\n31\n0.0\n`;
+      if (e.x0 === e.x1 && e.y0 === e.y1) {
+        // Dimple — a CIRCLE at bit radius so CAM can treat it as a drill op
+        dxf += `0\nCIRCLE\n8\n${layer}\n10\n${ix0}\n20\n${iy0}\n30\n0.0\n40\n${bitRadiusIn.toFixed(4)}\n`;
+      } else {
+        const [ix1, iy1] = toInches(e.x1, e.y1);
+        dxf += `0\nLINE\n8\n${layer}\n10\n${ix0}\n20\n${iy0}\n30\n0.0\n11\n${ix1}\n21\n${iy1}\n31\n0.0\n`;
+      }
     }
   }
 

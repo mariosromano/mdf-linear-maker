@@ -316,6 +316,135 @@ function imageLineFamily(
   return { edges, lineCount: base.length };
 }
 
+/** Quantize a 0..1 factor to IMAGE_DEPTH_LEVELS (bounds DXF layer count). */
+function qLevel(f: number): number {
+  return Math.max(1, Math.round(f * IMAGE_DEPTH_LEVELS)) / IMAGE_DEPTH_LEVELS;
+}
+
+/**
+ * Wave style: constant-depth lines that wiggle — amplitude follows the
+ * image, so the picture emerges from how agitated each line is.
+ * Constant depth also means constant tool load on the CNC.
+ */
+function imageWaveFamily(
+  wallW: number, wallH: number,
+  angleDeg: number, spacingFt: number, jitter: number,
+  sample: (x: number, y: number) => number,
+  rng: () => number
+): { edges: Edge[]; lineCount: number } {
+  const hw = wallW / 2, hh = wallH / 2;
+  const base = parallelFamily(wallW, wallH, angleDeg, spacingFt, jitter, 'Uniform', rng);
+  const wavelength = spacingFt * 3;
+  const step = wavelength / 8;
+  const maxAmp = spacingFt * 0.45; // stay clear of the neighbor line
+  const edges: Edge[] = [];
+
+  for (const line of base) {
+    const dx = line.x1 - line.x0, dy = line.y1 - line.y0;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len < step) continue;
+    const ux = dx / len, uy = dy / len;
+    const nx = -uy, ny = ux;
+    const n = Math.ceil(len / step);
+
+    let px = 0, py = 0, has = false;
+    for (let i = 0; i <= n; i++) {
+      const t = Math.min(i * step, len);
+      const cx = line.x0 + ux * t, cy = line.y0 + uy * t;
+      const amp = maxAmp * sample(cx, cy);
+      const off = amp * Math.sin((2 * Math.PI * t) / wavelength);
+      const wx = cx + nx * off, wy = cy + ny * off;
+      if (has) {
+        const clipped = clipSegment(px, py, wx, wy, -hw, -hh, hw, hh);
+        if (clipped) edges.push({ ...clipped, d: 1 });
+      }
+      px = wx;
+      py = wy;
+      has = true;
+    }
+  }
+  return { edges, lineCount: base.length };
+}
+
+/**
+ * Density style: line spacing follows the image — lines bunch together
+ * where the image is dark, like an engraving. Depth adds a soft assist.
+ */
+function imageDensityFamily(
+  wallW: number, wallH: number,
+  angleDeg: number, spacingFt: number,
+  sample: (x: number, y: number) => number
+): { edges: Edge[]; lineCount: number } {
+  const hw = wallW / 2, hh = wallH / 2;
+  const theta = (angleDeg * Math.PI) / 180;
+  const dx = Math.cos(theta), dy = Math.sin(theta);
+  const nxv = -dy, nyv = dx;
+  const diag = Math.sqrt(wallW * wallW + wallH * wallH);
+  const minS = spacingFt * 0.4;
+  const maxS = spacingFt * 1.8;
+  const edges: Edge[] = [];
+
+  let o = -diag / 2;
+  while (o <= diag / 2) {
+    const cx = nxv * o, cy = nyv * o;
+    const clipped = clipSegment(
+      cx - dx * diag, cy - dy * diag,
+      cx + dx * diag, cy + dy * diag,
+      -hw, -hh, hw, hh
+    );
+    let mean = 0;
+    if (clipped) {
+      // Mean image factor along this line drives local spacing
+      const K = 24;
+      for (let k = 0; k < K; k++) {
+        const t = (k + 0.5) / K;
+        mean += sample(
+          clipped.x0 + (clipped.x1 - clipped.x0) * t,
+          clipped.y0 + (clipped.y1 - clipped.y0) * t
+        );
+      }
+      mean /= K;
+      edges.push({ ...clipped, d: qLevel(0.55 + 0.45 * mean) });
+    }
+    o += maxS - (maxS - minS) * mean;
+  }
+  return { edges, lineCount: edges.length };
+}
+
+/**
+ * Dimples style: staggered grid of ball-end drill pecks — depth (and with
+ * it crater size) follows the image. Reads like a dot-screen print.
+ */
+function imageDimpleFamily(
+  wallW: number, wallH: number,
+  pitchFt: number, jitter: number,
+  sample: (x: number, y: number) => number,
+  rng: () => number
+): { edges: Edge[]; lineCount: number } {
+  const hw = wallW / 2, hh = wallH / 2;
+  const rowH = pitchFt * 0.866; // hex stagger
+  const cutoff = 0.06;
+  const edges: Edge[] = [];
+  let rows = 0;
+
+  for (let y = -hh + rowH / 2, row = 0; y < hh; y += rowH, row++) {
+    rows++;
+    const xOff = row % 2 === 0 ? 0 : pitchFt / 2;
+    for (let x = -hw + pitchFt / 2 + xOff; x < hw; x += pitchFt) {
+      let px = x, py = y;
+      if (jitter > 0) {
+        px += (rng() - 0.5) * jitter * pitchFt * 0.5;
+        py += (rng() - 0.5) * jitter * rowH * 0.5;
+      }
+      if (px < -hw || px > hw || py < -hh || py > hh) continue;
+      const f = sample(px, py);
+      if (f < cutoff) continue;
+      edges.push({ x0: px, y0: py, x1: px, y1: py, d: qLevel(f) });
+    }
+  }
+  return { edges, lineCount: edges.length };
+}
+
 function generatePattern(
   params: LinearParams,
   relief: ReliefField | null
@@ -375,7 +504,20 @@ function generatePattern(
     case 'Image Lines': {
       if (!relief) break;
       const sample = makeWallSampler(relief, w, h);
-      const result = imageLineFamily(w, h, params.angle, spacingFt, jitter, sample, rng);
+      let result: { edges: Edge[]; lineCount: number };
+      switch (params.imageStyle) {
+        case 'Wave':
+          result = imageWaveFamily(w, h, params.angle, spacingFt, jitter, sample, rng);
+          break;
+        case 'Density':
+          result = imageDensityFamily(w, h, params.angle, spacingFt, sample);
+          break;
+        case 'Dimples':
+          result = imageDimpleFamily(w, h, spacingFt, jitter, sample, rng);
+          break;
+        default:
+          result = imageLineFamily(w, h, params.angle, spacingFt, jitter, sample, rng);
+      }
       edges = result.edges;
       lineCount = result.lineCount;
       break;
