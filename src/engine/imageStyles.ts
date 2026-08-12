@@ -391,7 +391,7 @@ function ribbonStyle(ctx: ImageStyleContext): ImageStyleResult {
         const wd = bspline(at(cds, span - 1), at(cds, span), at(cds, span + 1), at(cds, span + 2), t);
         if (has) {
           const clipped = clipSegment(px, py, wx, wy, -hw, -hh, hw, hh);
-          if (clipped) edges.push({ ...clipped, d: qLevel((pd + wd) / 2) });
+          if (clipped) edges.push({ ...clipped, d: (pd + wd) / 2 }); // continuous z, TPM-style
         }
         px = wx;
         py = wy;

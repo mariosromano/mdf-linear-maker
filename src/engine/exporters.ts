@@ -1,5 +1,5 @@
 import type { BitProfile, Edge, Panel, ReliefField } from './types';
-import { PANEL_THICKNESS_IN } from './types';
+import { IMAGE_DEPTH_LEVELS, PANEL_THICKNESS_IN } from './types';
 import { combineHeightFields, generateHeightField, generateReliefHeightField } from './textures';
 
 // ─── DXF Export (2D cut file — drives the CNC) ───────────────────
@@ -24,10 +24,13 @@ export function buildDXF(
   const wIn = (wallW * 12).toFixed(4);
   const hIn = (wallH * 12).toFixed(4);
 
-  // Group pattern edges by their actual carve depth in inches
+  // Group pattern edges by carve depth in inches. Depth factors may be
+  // continuous (Ribbon carves smooth variable z) — quantize HERE so the
+  // cut file stays at a bounded, CAM-friendly layer count.
   const byDepth = new Map<string, Edge[]>();
   for (const e of edges) {
-    const depthIn = maxDepthIn * (e.d ?? 1);
+    const dq = Math.max(1, Math.round((e.d ?? 1) * IMAGE_DEPTH_LEVELS)) / IMAGE_DEPTH_LEVELS;
+    const depthIn = maxDepthIn * dq;
     const layer = `CUT_D${String(Math.round(depthIn * 1000)).padStart(4, '0')}`;
     if (!byDepth.has(layer)) byDepth.set(layer, []);
     byDepth.get(layer)!.push(e);
