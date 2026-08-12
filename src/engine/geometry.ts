@@ -189,13 +189,45 @@ function boxBlur(src: Float32Array, w: number, h: number, radius: number): Float
   return out;
 }
 
-/** Luminance image → per-pixel depth factor (0..1), with blur + polarity. */
-export function processImage(image: SourceImage, invert: boolean, smooth: number): ReliefField {
+/**
+ * Luminance image → per-pixel depth factor (0..1).
+ * Pipeline: blur → auto-contrast (2nd/98th percentile stretch, so washed-out
+ * photos still carve the full depth range) → polarity → depth-curve gamma.
+ */
+export function processImage(
+  image: SourceImage,
+  invert: boolean,
+  smooth: number,
+  gamma: number = 1
+): ReliefField {
   const blurred = boxBlur(image.lum, image.w, image.h, smooth);
-  const data = new Float32Array(image.w * image.h);
-  for (let i = 0; i < data.length; i++) {
-    const lum = blurred[i];
-    data[i] = invert ? lum : 1 - lum; // default: dark carves deepest
+  const n = image.w * image.h;
+
+  // Auto-contrast: stretch to the 0.2% / 99.8% luminance percentiles.
+  // Near-true min/max (robust to stray pixels after the blur) so washed-out
+  // photos use the full depth range WITHOUT flattening smooth gradients
+  // into clipped plateaus the way an aggressive percentile stretch would.
+  const hist = new Uint32Array(256);
+  for (let i = 0; i < n; i++) {
+    hist[Math.max(0, Math.min(255, (blurred[i] * 255) | 0))]++;
+  }
+  const loCount = n * 0.002, hiCount = n * 0.998;
+  let acc = 0, lo = 0, hi = 255;
+  for (let b = 0; b < 256; b++) {
+    acc += hist[b];
+    if (acc <= loCount) lo = b;
+    if (acc <= hiCount) hi = b;
+  }
+  const loF = lo / 255, hiF = Math.max(hi / 255, loF + 1 / 255);
+  const invRange = 1 / (hiF - loF);
+
+  const g = Math.max(0.1, gamma);
+  const data = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    let v = (blurred[i] - loF) * invRange;
+    v = v < 0 ? 0 : v > 1 ? 1 : v;
+    v = invert ? v : 1 - v; // default: dark carves deepest
+    data[i] = g === 1 ? v : Math.pow(v, g);
   }
   return { data, w: image.w, h: image.h };
 }
@@ -210,7 +242,10 @@ export function makeWallSampler(
   wallH: number
 ): (x: number, y: number) => number {
   const { data, w, h } = relief;
-  const scale = Math.max((w - 1) / wallW, (h - 1) / wallH); // px per foot, cover
+  // Cover-fit: the image spans the wall's larger dimension fully and is
+  // center-cropped on the other — px-per-foot is the SMALLER ratio, else
+  // part of the wall would sample clamped edge pixels as flat streaks.
+  const scale = Math.min((w - 1) / wallW, (h - 1) / wallH);
   const cx = (w - 1) / 2, cy = (h - 1) / 2;
   return (x: number, y: number): number => {
     const px = Math.max(0, Math.min(w - 1.001, cx + x * scale));
@@ -412,7 +447,7 @@ export interface LinearPattern {
 export function computePattern(params: LinearParams, image: SourceImage | null): LinearPattern {
   const isImageMode = params.pattern === 'Image Lines' || params.pattern === 'Image Relief';
   const relief = isImageMode && image
-    ? processImage(image, params.imageInvert, params.imageSmooth)
+    ? processImage(image, params.imageInvert, params.imageSmooth, params.imageGamma)
     : null;
   const { edges, lineCount } = generatePattern(params, relief);
   const panels = tilePanels(params.wallWidth, params.wallHeight);

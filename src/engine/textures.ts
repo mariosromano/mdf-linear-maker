@@ -126,93 +126,81 @@ export function combineHeightFields(a: Float32Array, b: Float32Array): Float32Ar
   return out;
 }
 
-// ─── Height field → displacement canvas ──────────────────────────
-// White (255) = surface, Black (0) = maximum carve depth.
-export function heightFieldToCanvas(
+/**
+ * Burn panel seam lines into the height field (interior edges only,
+ * deduplicated). 1/16" wide, fixed shallow depth — a discreet joint line.
+ */
+export function burnPanelSeams(
   heightmap: Float32Array,
   resW: number,
   resH: number,
-  maxDepthFt: number
-): HTMLCanvasElement {
-  const canvas = document.createElement('canvas');
-  canvas.width = resW;
-  canvas.height = resH;
-  const ctx = canvas.getContext('2d')!;
-  const imgData = ctx.createImageData(resW, resH);
-  const data = imgData.data;
-  const invD = 1 / maxDepthFt;
-
-  for (let i = 0, len = heightmap.length; i < len; i++) {
-    const normalized = heightmap[i] * invD;
-    const val = ((1 - (normalized > 1 ? 1 : normalized)) * 255 + 0.5) | 0;
-    const off = i << 2;
-    data[off] = val;
-    data[off + 1] = val;
-    data[off + 2] = val;
-    data[off + 3] = 255;
-  }
-
-  ctx.putImageData(imgData, 0, 0);
-  return canvas;
-}
-
-/** Draw panel seam lines onto the displacement canvas (interior edges only, deduplicated). */
-export function drawPanelSeams(
-  dispCanvas: HTMLCanvasElement,
   panels: Panel[],
   wallW: number,
-  wallH: number
+  wallH: number,
+  seamDepthFt: number
 ): void {
-  const resW = dispCanvas.width, resH = dispCanvas.height;
-  const pxPerFt = resW / wallW;
-  const ctx = dispCanvas.getContext('2d')!;
-  ctx.strokeStyle = 'rgba(0,0,0,0.35)';
-  ctx.lineWidth = Math.max(1, (1 / 16 / 12) * pxPerFt); // 1/16" joint line
-  ctx.lineCap = 'butt';
-  ctx.beginPath();
+  const pxPerFtX = resW / wallW, pxPerFtY = resH / wallH;
+  const halfWidthPx = Math.max(0.5, ((1 / 16 / 12) * pxPerFtX) / 2);
+
+  const burnV = (xFt: number, y0Ft: number, y1Ft: number) => {
+    const px = xFt * pxPerFtX;
+    const x0 = Math.max(0, Math.round(px - halfWidthPx));
+    const x1 = Math.min(resW - 1, Math.round(px + halfWidthPx));
+    const r0 = Math.max(0, Math.round((wallH - y1Ft) * pxPerFtY));
+    const r1 = Math.min(resH - 1, Math.round((wallH - y0Ft) * pxPerFtY));
+    for (let ry = r0; ry <= r1; ry++)
+      for (let rx = x0; rx <= x1; rx++) {
+        const i = ry * resW + rx;
+        if (heightmap[i] < seamDepthFt) heightmap[i] = seamDepthFt;
+      }
+  };
+  const burnH = (yFt: number, x0Ft: number, x1Ft: number) => {
+    const py = (wallH - yFt) * pxPerFtY;
+    const r0 = Math.max(0, Math.round(py - halfWidthPx));
+    const r1 = Math.min(resH - 1, Math.round(py + halfWidthPx));
+    const x0 = Math.max(0, Math.round(x0Ft * pxPerFtX));
+    const x1 = Math.min(resW - 1, Math.round(x1Ft * pxPerFtX));
+    for (let ry = r0; ry <= r1; ry++)
+      for (let rx = x0; rx <= x1; rx++) {
+        const i = ry * resW + rx;
+        if (heightmap[i] < seamDepthFt) heightmap[i] = seamDepthFt;
+      }
+  };
+
   const drawn = new Set<string>();
   for (const p of panels) {
     const x0 = p.gx * 2, y0 = p.gy * 2;
     const x1 = x0 + p.w, y1 = y0 + p.h;
-    const px0 = x0 * (resW / wallW), px1 = x1 * (resW / wallW);
-    const cy0 = (wallH - y1) * (resH / wallH), cy1 = (wallH - y0) * (resH / wallH);
-    if (x0 > 0) {
-      const k = `V${x0}:${y0}:${y1}`;
-      if (!drawn.has(k)) { drawn.add(k); ctx.moveTo(px0, cy0); ctx.lineTo(px0, cy1); }
-    }
-    if (x1 < wallW) {
-      const k = `V${x1}:${y0}:${y1}`;
-      if (!drawn.has(k)) { drawn.add(k); ctx.moveTo(px1, cy0); ctx.lineTo(px1, cy1); }
-    }
-    if (y0 > 0) {
-      const k = `H${y0}:${x0}:${x1}`;
-      if (!drawn.has(k)) { drawn.add(k); ctx.moveTo(px0, cy1); ctx.lineTo(px1, cy1); }
-    }
-    if (y1 < wallH) {
-      const k = `H${y1}:${x0}:${x1}`;
-      if (!drawn.has(k)) { drawn.add(k); ctx.moveTo(px0, cy0); ctx.lineTo(px1, cy0); }
-    }
+    if (x0 > 0 && !drawn.has(`V${x0}:${y0}:${y1}`)) { drawn.add(`V${x0}:${y0}:${y1}`); burnV(x0, y0, y1); }
+    if (x1 < wallW && !drawn.has(`V${x1}:${y0}:${y1}`)) { drawn.add(`V${x1}:${y0}:${y1}`); burnV(x1, y0, y1); }
+    if (y0 > 0 && !drawn.has(`H${y0}:${x0}:${x1}`)) { drawn.add(`H${y0}:${x0}:${x1}`); burnH(y0, x0, x1); }
+    if (y1 < wallH && !drawn.has(`H${y1}:${x0}:${x1}`)) { drawn.add(`H${y1}:${x0}:${x1}`); burnH(y1, x0, x1); }
   }
-  ctx.stroke();
 }
 
-// ─── Normal map from displacement (Sobel) ────────────────────────
-export function generateNormalMap(dispCanvas: HTMLCanvasElement, strength: number): HTMLCanvasElement {
-  const w = dispCanvas.width, h = dispCanvas.height;
-  const srcCtx = dispCanvas.getContext('2d')!;
-  const srcData = srcCtx.getImageData(0, 0, w, h).data;
-
+// ─── Normal map from the float height field (Sobel) ──────────────
+// Computed from full-precision heights so smooth relief slopes shade
+// cleanly — no 8-bit contour banding.
+export function generateNormalMapFromField(
+  heightmap: Float32Array,
+  w: number,
+  h: number,
+  maxDepthFt: number,
+  strength: number
+): HTMLCanvasElement {
   const normCanvas = document.createElement('canvas');
   normCanvas.width = w;
   normCanvas.height = h;
   const ctx = normCanvas.getContext('2d')!;
   const imgData = ctx.createImageData(w, h);
   const out = imgData.data;
+  const invD = 1 / maxDepthFt;
 
   function ht(x: number, y: number): number {
     x = Math.max(0, Math.min(w - 1, x));
     y = Math.max(0, Math.min(h - 1, y));
-    return srcData[(y * w + x) * 4] / 255;
+    const norm = heightmap[y * w + x] * invD;
+    return 1 - (norm > 1 ? 1 : norm); // 1 = surface, 0 = deepest
   }
 
   for (let y = 0; y < h; y++) {

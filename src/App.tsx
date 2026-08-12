@@ -4,7 +4,7 @@ import type { LinearParams, LightingPreset } from './engine/types';
 import { computePattern, panelBreakdown } from './engine/geometry';
 import { calculatePricing, fmtPrice, PRICE_PER_SQFT } from './engine/pricing';
 import { readBridgeFlags, readInitialParams, reportDesign } from './lib/bridge';
-import { defaultSourceImage, fileToSourceImage } from './lib/imageLoader';
+import { fileToSourceImage, presetToSourceImage } from './lib/imageLoader';
 import type { SourceImage } from './engine/types';
 import Viewport3D from './components/Viewport3D';
 import ControlPanel from './components/ControlPanel';
@@ -22,6 +22,7 @@ export default function App() {
   const [renderOpen, setRenderOpen] = useState(false);
   const [image, setImage] = useState<SourceImage | null>(null);
   const [imageName, setImageName] = useState<string | null>(null);
+  const [selectedPresetId, setSelectedPresetId] = useState<string | null>('topography');
   const [presentationMode, setPresentationMode] = useState(false);
 
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -35,9 +36,9 @@ export default function App() {
     return () => clearTimeout(t);
   }, [params]);
 
-  // Built-in demo image so image modes have something to carve immediately
+  // Default library image so image modes have something to carve immediately
   useEffect(() => {
-    setImage((img) => img ?? defaultSourceImage());
+    setImage((img) => img ?? presetToSourceImage('topography'));
   }, []);
 
   const handleImageUpload = useCallback((file: File) => {
@@ -45,8 +46,18 @@ export default function App() {
       .then((src) => {
         setImage(src);
         setImageName(file.name);
+        setSelectedPresetId(null);
       })
       .catch(() => {});
+  }, []);
+
+  const handleSelectPreset = useCallback((id: string) => {
+    const src = presetToSourceImage(id);
+    if (src) {
+      setImage(src);
+      setImageName(null);
+      setSelectedPresetId(id);
+    }
   }, []);
 
   const pattern = useMemo(
@@ -233,7 +244,9 @@ export default function App() {
               onParamsChange={setParams}
               onRandomize={handleRandomize}
               imageName={imageName}
+              selectedPresetId={selectedPresetId}
               onImageUpload={handleImageUpload}
+              onSelectPreset={handleSelectPreset}
               lightingPreset={lightingPreset}
               onLightingPresetChange={setLightingPreset}
               bgColor={bgColor}

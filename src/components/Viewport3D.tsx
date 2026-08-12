@@ -8,9 +8,8 @@ import {
   generateHeightField,
   generateReliefHeightField,
   combineHeightFields,
-  heightFieldToCanvas,
-  drawPanelSeams,
-  generateNormalMap,
+  burnPanelSeams,
+  generateNormalMapFromField,
 } from '../engine/textures';
 
 interface Viewport3DProps {
@@ -291,22 +290,35 @@ export default function Viewport3D({
       const reliefField = generateReliefHeightField(relief, wallW, wallH, carveDepthFt, resW, resH);
       heightField = edges.length > 0 ? combineHeightFields(heightField, reliefField) : reliefField;
     }
-    const dispCanvas = heightFieldToCanvas(heightField, resW, resH, carveDepthFt);
-    drawPanelSeams(dispCanvas, panels, wallW, wallH);
+    burnPanelSeams(heightField, resW, resH, panels, wallW, wallH, carveDepthFt * 0.35);
 
     const maxAniso = renderer.capabilities.getMaxAnisotropy();
 
-    const dispTexture = new THREE.CanvasTexture(dispCanvas);
+    // Float displacement texture — full precision, no 8-bit contour banding
+    // on smooth relief slopes. Rows flipped: field row 0 is the wall top,
+    // texture row 0 is v=0 (wall bottom).
+    const dispData = new Float32Array(resW * resH);
+    const invD = 1 / carveDepthFt;
+    for (let y = 0; y < resH; y++) {
+      const src = y * resW;
+      const dst = (resH - 1 - y) * resW;
+      for (let x = 0; x < resW; x++) {
+        const norm = heightField[src + x] * invD;
+        dispData[dst + x] = 1 - (norm > 1 ? 1 : norm);
+      }
+    }
+    const dispTexture = new THREE.DataTexture(dispData, resW, resH, THREE.RedFormat, THREE.FloatType);
     dispTexture.wrapS = THREE.ClampToEdgeWrapping;
     dispTexture.wrapT = THREE.ClampToEdgeWrapping;
-    dispTexture.generateMipmaps = true;
-    dispTexture.minFilter = THREE.LinearMipmapLinearFilter;
+    dispTexture.minFilter = THREE.LinearFilter;
     dispTexture.magFilter = THREE.LinearFilter;
-    dispTexture.anisotropy = maxAniso;
+    dispTexture.needsUpdate = true;
 
-    // Normal map strength scales with carve depth so depth reads visually
-    const normalStrength = 4 + (carveDepthIn / 0.375) * 8;
-    const normCanvas = generateNormalMap(dispCanvas, normalStrength);
+    // Normal map strength scales with carve depth so depth reads visually;
+    // relief slopes are far gentler than groove walls, so boost them.
+    const isReliefOnly = !!relief && edges.length === 0;
+    const normalStrength = (4 + (carveDepthIn / 0.375) * 8) * (isReliefOnly ? 3.5 : 1);
+    const normCanvas = generateNormalMapFromField(heightField, resW, resH, carveDepthFt, normalStrength);
 
     const normTexture = new THREE.CanvasTexture(normCanvas);
     normTexture.wrapS = THREE.ClampToEdgeWrapping;
@@ -318,10 +330,12 @@ export default function Viewport3D({
 
     const matPreset = MATERIALS[params.material] ?? MATERIALS['White Oak'];
 
-    // Exaggerate displacement 3× so groove depth is clearly visible in the
-    // 3D view. (DXF and STL exports remain dimensionally accurate.)
-    const dispScale = carveDepthFt * 3;
-    const nmScale = 0.8 + (carveDepthIn / 0.375) * 1.2;
+    // Exaggerate displacement so carve depth is clearly visible in the 3D
+    // view — more for continuous relief, whose gentle slopes read weakly at
+    // wall scale. (DXF and STL exports remain dimensionally accurate.)
+    const isRelief = !!relief && edges.length === 0;
+    const dispScale = carveDepthFt * (isRelief ? 6 : 3);
+    const nmScale = (0.8 + (carveDepthIn / 0.375) * 1.2) * (isRelief ? 2 : 1);
 
     const panelMat = new THREE.MeshStandardMaterial({
       color: new THREE.Color(matPreset.color),

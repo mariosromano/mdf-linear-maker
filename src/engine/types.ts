@@ -25,6 +25,7 @@ export interface LinearParams {
   depthMode: DepthMode;
   imageInvert: boolean;  // false: dark areas carve deepest; true: light areas
   imageSmooth: number;   // 0..10 blur radius (source pixels) before depth mapping
+  imageGamma: number;    // 0.4..2.5 depth curve — <1 broadens carving, >1 focuses on darkest areas
   bitSize: BitSize;
   bitProfile: BitProfile;
   carveDepth: CarveDepth; // maximum carve depth — depthMode scales per line
@@ -130,6 +131,7 @@ export const DEFAULT_PARAMS: LinearParams = {
   depthMode: 'Alternating',
   imageInvert: false,
   imageSmooth: 2,
+  imageGamma: 1.0,
   bitSize: '1/2"',
   bitProfile: 'Ball-end',
   carveDepth: '1/4"',

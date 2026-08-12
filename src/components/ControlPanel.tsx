@@ -1,20 +1,24 @@
-import { useState } from 'react';
-import type { LinearParams, LightingPreset } from '../engine/types';
+import { useMemo, useState } from 'react';
+import type { LinearParams, LightingPreset, PatternType } from '../engine/types';
 import {
   MATERIALS,
-  PATTERNS,
   DEPTH_MODES,
   BIT_SIZES,
   BIT_PROFILES,
   CARVE_DEPTHS,
 } from '../engine/types';
+import { IMAGE_PRESETS, presetThumbnails } from '../lib/imageLoader';
+
+const LINEAR_PATTERNS: PatternType[] = ['Parallel', 'Crosshatch', 'Chevron', 'Waves', 'Fan'];
 
 interface ControlPanelProps {
   params: LinearParams;
   onParamsChange: React.Dispatch<React.SetStateAction<LinearParams>>;
   onRandomize: () => void;
   imageName: string | null;
+  selectedPresetId: string | null;
   onImageUpload: (file: File) => void;
+  onSelectPreset: (id: string) => void;
   lightingPreset: LightingPreset;
   onLightingPresetChange: (preset: LightingPreset) => void;
   bgColor: string;
@@ -127,12 +131,40 @@ function Segmented<T extends string>({
   );
 }
 
+function Toggle({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center justify-between mb-3 last:mb-0">
+      <label className="text-[12px] text-[var(--ink-soft)]">{label}</label>
+      <label className="relative w-10 h-[22px] cursor-pointer">
+        <input
+          type="checkbox"
+          className="sr-only peer"
+          checked={checked}
+          onChange={(e) => onChange(e.target.checked)}
+        />
+        <div className="w-10 h-[22px] bg-[var(--surface-4)] rounded-full peer-checked:bg-[var(--gold)] transition-colors" />
+        <div className="absolute left-[3px] bottom-[3px] w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-[18px] shadow-sm" />
+      </label>
+    </div>
+  );
+}
+
 export default function ControlPanel({
   params,
   onParamsChange,
   onRandomize,
   imageName,
+  selectedPresetId,
   onImageUpload,
+  onSelectPreset,
   lightingPreset,
   onLightingPresetChange,
   bgColor,
@@ -143,12 +175,37 @@ export default function ControlPanel({
   const set = <K extends keyof LinearParams>(key: K, value: LinearParams[K]) =>
     onParamsChange((p) => ({ ...p, [key]: value }));
 
+  // Image Lines wants tight spacing to resolve the picture — nudge once on entry
+  const setPattern = (pat: PatternType) =>
+    onParamsChange((p) => ({
+      ...p,
+      pattern: pat,
+      ...(pat === 'Image Lines' && p.pattern !== 'Image Lines' && p.spacing > 3
+        ? { spacing: 2 }
+        : {}),
+    }));
+
   const isImage = params.pattern === 'Image Lines' || params.pattern === 'Image Relief';
+
+  // Remember last selection on each tab so switching back restores it
+  const [lastLinear, setLastLinear] = useState<PatternType>('Crosshatch');
+  const [lastImage, setLastImage] = useState<PatternType>('Image Lines');
+
+  const switchTab = (tab: 'pattern' | 'image') => {
+    if (tab === 'pattern' && isImage) {
+      setLastImage(params.pattern);
+      setPattern(lastLinear);
+    } else if (tab === 'image' && !isImage) {
+      setLastLinear(params.pattern);
+      setPattern(lastImage);
+    }
+  };
+
+  const thumbs = useMemo(() => presetThumbnails(), []);
+
   const isAngled =
     params.pattern === 'Parallel' || params.pattern === 'Crosshatch' || params.pattern === 'Image Lines';
   const isWavy = params.pattern === 'Chevron' || params.pattern === 'Waves';
-  const hasSpacing = params.pattern !== 'Image Relief';
-  const hasJitter = params.pattern !== 'Image Relief';
 
   return (
     <>
@@ -169,29 +226,149 @@ export default function ControlPanel({
         />
       </Section>
 
-      <Section title="Pattern">
-        <div className="grid grid-cols-3 gap-1.5 mb-3.5">
-          {PATTERNS.map((p) => (
-            <button
-              key={p}
-              onClick={() => set('pattern', p)}
-              className={`py-2 px-1 rounded-lg border text-[11px] font-medium transition-colors ${
-                params.pattern === p
-                  ? 'border-[var(--gold)] bg-[var(--surface-3)] text-[var(--ink)]'
-                  : 'border-[var(--line)] bg-[var(--surface-1)] text-[var(--ink-muted)] hover:text-[var(--ink-soft)] hover:border-[var(--line-strong)]'
-              }`}
-            >
-              {p}
-            </button>
-          ))}
+      <Section title="Design">
+        {/* Tab switch: geometric patterns vs image-driven carving */}
+        <div className="flex rounded-lg bg-[var(--surface-1)] border border-[var(--line)] p-0.5 gap-0.5 mb-3.5">
+          {(['pattern', 'image'] as const).map((tab) => {
+            const active = tab === 'image' ? isImage : !isImage;
+            return (
+              <button
+                key={tab}
+                onClick={() => switchTab(tab)}
+                className={`flex-1 py-2 rounded-md text-[12px] font-semibold transition-colors ${
+                  active
+                    ? 'bg-[var(--gold)] text-[#1a1a14]'
+                    : 'text-[var(--ink-muted)] hover:text-[var(--ink-soft)] hover:bg-[var(--surface-3)]'
+                }`}
+              >
+                {tab === 'pattern' ? 'Pattern' : 'Image'}
+              </button>
+            );
+          })}
         </div>
 
+        {!isImage && (
+          <>
+            <div className="grid grid-cols-3 gap-1.5 mb-3.5">
+              {LINEAR_PATTERNS.map((p) => (
+                <button
+                  key={p}
+                  onClick={() => set('pattern', p)}
+                  className={`py-2 px-1 rounded-lg border text-[11px] font-medium transition-colors ${
+                    params.pattern === p
+                      ? 'border-[var(--gold)] bg-[var(--surface-3)] text-[var(--ink)]'
+                      : 'border-[var(--line)] bg-[var(--surface-1)] text-[var(--ink-muted)] hover:text-[var(--ink-soft)] hover:border-[var(--line-strong)]'
+                  }`}
+                >
+                  {p}
+                </button>
+              ))}
+            </div>
+
+            <Slider
+              label="Line Spacing"
+              value={params.spacing}
+              min={1} max={24} step={0.5}
+              format={(v) => `${v}″`}
+              onChange={(v) => set('spacing', v)}
+            />
+
+            {isAngled && (
+              <Slider
+                label="Angle"
+                value={params.angle}
+                min={0} max={180} step={5}
+                format={(v) => `${v}°`}
+                onChange={(v) => set('angle', v)}
+              />
+            )}
+
+            {params.pattern === 'Crosshatch' && (
+              <Slider
+                label="Cross Angle"
+                value={params.crossAngle}
+                min={15} max={165} step={5}
+                format={(v) => `${v}°`}
+                onChange={(v) => set('crossAngle', v)}
+                info="Angle between the two line families."
+              />
+            )}
+
+            {isWavy && (
+              <>
+                <Slider
+                  label={params.pattern === 'Chevron' ? 'Peak Height' : 'Wave Height'}
+                  value={params.waveAmplitude}
+                  min={0.5} max={12} step={0.5}
+                  format={(v) => `${v}″`}
+                  onChange={(v) => set('waveAmplitude', v)}
+                />
+                <Slider
+                  label={params.pattern === 'Chevron' ? 'Peak Width' : 'Wave Length'}
+                  value={params.wavePeriod}
+                  min={4} max={48} step={1}
+                  format={(v) => `${v}″`}
+                  onChange={(v) => set('wavePeriod', v)}
+                />
+              </>
+            )}
+
+            <Slider
+              label="Jitter"
+              value={params.jitter}
+              min={0} max={1} step={0.05}
+              format={(v) => `${Math.round(v * 100)}%`}
+              onChange={(v) => set('jitter', v)}
+              info="Random offset per line — 0% is perfectly regular."
+            />
+
+            <button
+              onClick={onRandomize}
+              className="w-full py-2.5 rounded-lg bg-[var(--surface-3)] hover:bg-[var(--surface-4)] border border-[var(--line-strong)] text-[var(--ink-soft)] hover:text-[var(--ink)] text-[12px] font-medium transition-colors"
+            >
+              ↻ Reshuffle Jitter &amp; Depths
+            </button>
+          </>
+        )}
+
         {isImage && (
-          <div className="mb-3.5">
-            <div className="text-[12px] text-[var(--ink-soft)] mb-1.5">Image</div>
-            <label className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg border border-dashed border-[var(--line-strong)] bg-[var(--surface-1)] text-[12px] text-[var(--ink-soft)] hover:text-[var(--ink)] hover:border-[var(--gold-deep)] cursor-pointer transition-colors">
+          <>
+            <Segmented
+              label="Carve As"
+              value={params.pattern === 'Image Relief' ? 'Relief' : 'Lines'}
+              options={['Lines', 'Relief'] as const}
+              onChange={(v) => setPattern(v === 'Relief' ? 'Image Relief' : 'Image Lines')}
+            />
+
+            <div className="text-[12px] text-[var(--ink-soft)] mb-1.5">Library</div>
+            <div className="grid grid-cols-4 gap-1.5 mb-2.5">
+              {IMAGE_PRESETS.map((p) => (
+                <button
+                  key={p.id}
+                  onClick={() => onSelectPreset(p.id)}
+                  title={p.name}
+                  className={`relative rounded-lg overflow-hidden border-2 transition-colors aspect-square ${
+                    selectedPresetId === p.id
+                      ? 'border-[var(--gold)]'
+                      : 'border-transparent hover:border-[var(--line-strong)]'
+                  }`}
+                >
+                  <img src={thumbs[p.id]} alt={p.name} className="w-full h-full object-cover" />
+                </button>
+              ))}
+            </div>
+            <p className="text-[10.5px] text-[var(--ink-faint)] mb-2.5 leading-relaxed">
+              {selectedPresetId
+                ? `Library: ${IMAGE_PRESETS.find((p) => p.id === selectedPresetId)?.name ?? ''}`
+                : imageName
+                  ? `Uploaded: ${imageName}`
+                  : 'Pick a design or upload your own.'}
+              {' '}Dark areas carve deepest.
+            </p>
+
+            <label className="flex items-center justify-center gap-2 w-full py-2.5 mb-3.5 rounded-lg border border-dashed border-[var(--line-strong)] bg-[var(--surface-1)] text-[12px] text-[var(--ink-soft)] hover:text-[var(--ink)] hover:border-[var(--gold-deep)] cursor-pointer transition-colors">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-              {imageName ? 'Replace image' : 'Upload image'}
+              Upload your own image
               <input
                 type="file"
                 accept="image/*"
@@ -203,108 +380,55 @@ export default function ControlPanel({
                 }}
               />
             </label>
-            <p className="text-[10.5px] text-[var(--ink-faint)] mt-1.5 leading-relaxed truncate">
-              {imageName ? `Loaded: ${imageName}` : 'Using the built-in M|R demo image.'}
-              {' '}Dark areas carve deepest.
-            </p>
-            <div className="flex items-center justify-between mt-2.5 mb-3">
-              <label className="text-[12px] text-[var(--ink-soft)]">Invert (carve light areas)</label>
-              <label className="relative w-10 h-[22px] cursor-pointer">
-                <input
-                  type="checkbox"
-                  className="sr-only peer"
-                  checked={params.imageInvert}
-                  onChange={(e) => set('imageInvert', e.target.checked)}
-                />
-                <div className="w-10 h-[22px] bg-[var(--surface-4)] rounded-full peer-checked:bg-[var(--gold)] transition-colors" />
-                <div className="absolute left-[3px] bottom-[3px] w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-[18px] shadow-sm" />
-              </label>
-            </div>
+
+            <Toggle
+              label="Invert (carve light areas)"
+              checked={params.imageInvert}
+              onChange={(v) => set('imageInvert', v)}
+            />
             <Slider
               label="Smoothing"
               value={params.imageSmooth}
               min={0} max={10} step={1}
               format={(v) => `${v}px`}
               onChange={(v) => set('imageSmooth', v)}
-              info="Blurs the image before depth mapping — higher is softer relief."
-            />
-          </div>
-        )}
-
-        {hasSpacing && (
-        <Slider
-          label="Line Spacing"
-          value={params.spacing}
-          min={1} max={24} step={0.5}
-          format={(v) => `${v}″`}
-          onChange={(v) => set('spacing', v)}
-        />
-        )}
-
-        {isAngled && (
-          <Slider
-            label="Angle"
-            value={params.angle}
-            min={0} max={180} step={5}
-            format={(v) => `${v}°`}
-            onChange={(v) => set('angle', v)}
-          />
-        )}
-
-        {params.pattern === 'Crosshatch' && (
-          <Slider
-            label="Cross Angle"
-            value={params.crossAngle}
-            min={15} max={165} step={5}
-            format={(v) => `${v}°`}
-            onChange={(v) => set('crossAngle', v)}
-            info="Angle between the two line families."
-          />
-        )}
-
-        {isWavy && (
-          <>
-            <Slider
-              label={params.pattern === 'Chevron' ? 'Peak Height' : 'Wave Height'}
-              value={params.waveAmplitude}
-              min={0.5} max={12} step={0.5}
-              format={(v) => `${v}″`}
-              onChange={(v) => set('waveAmplitude', v)}
             />
             <Slider
-              label={params.pattern === 'Chevron' ? 'Peak Width' : 'Wave Length'}
-              value={params.wavePeriod}
-              min={4} max={48} step={1}
-              format={(v) => `${v}″`}
-              onChange={(v) => set('wavePeriod', v)}
+              label="Depth Curve"
+              value={params.imageGamma}
+              min={0.4} max={2.5} step={0.05}
+              format={(v) => v.toFixed(2)}
+              onChange={(v) => set('imageGamma', v)}
+              info="Below 1 carves broadly; above 1 focuses depth on the darkest areas."
             />
+
+            {params.pattern === 'Image Lines' && (
+              <>
+                <Slider
+                  label="Line Spacing"
+                  value={params.spacing}
+                  min={1} max={24} step={0.5}
+                  format={(v) => `${v}″`}
+                  onChange={(v) => set('spacing', v)}
+                />
+                <Slider
+                  label="Angle"
+                  value={params.angle}
+                  min={0} max={180} step={5}
+                  format={(v) => `${v}°`}
+                  onChange={(v) => set('angle', v)}
+                />
+              </>
+            )}
           </>
         )}
-
-        {hasJitter && (
-        <Slider
-          label="Jitter"
-          value={params.jitter}
-          min={0} max={1} step={0.05}
-          format={(v) => `${Math.round(v * 100)}%`}
-          onChange={(v) => set('jitter', v)}
-          info="Random offset per line — 0% is perfectly regular."
-        />
-        )}
-
-        <button
-          onClick={onRandomize}
-          className="w-full py-2.5 rounded-lg bg-[var(--surface-3)] hover:bg-[var(--surface-4)] border border-[var(--line-strong)] text-[var(--ink-soft)] hover:text-[var(--ink)] text-[12px] font-medium transition-colors"
-        >
-          ↻ Reshuffle Jitter &amp; Depths
-        </button>
       </Section>
 
       <Section title="CNC Carving">
         <Segmented label="Bit Size" value={params.bitSize} options={BIT_SIZES} onChange={(v) => set('bitSize', v)} />
         <Segmented label="Bit Profile" value={params.bitProfile} options={BIT_PROFILES} onChange={(v) => set('bitProfile', v)} />
         <Segmented label="Max Carve Depth" value={params.carveDepth} options={CARVE_DEPTHS} onChange={(v) => set('carveDepth', v)} />
-        {!isImage && (
+        {!isImage ? (
           <>
             <Segmented label="Depth Variation" value={params.depthMode} options={DEPTH_MODES} onChange={(v) => set('depthMode', v)} />
             <p className="text-[10.5px] text-[var(--ink-faint)] mt-1.5 leading-relaxed">
@@ -312,8 +436,7 @@ export default function ControlPanel({
               pairs deep and shallow lines, Gradient ramps across the wall.
             </p>
           </>
-        )}
-        {isImage && (
+        ) : (
           <p className="text-[10.5px] text-[var(--ink-faint)] mt-1.5 leading-relaxed">
             Carve depth follows the image — Max Carve Depth sets the darkest
             (deepest) point.
@@ -359,19 +482,7 @@ export default function ControlPanel({
             className="w-12 h-7"
           />
         </div>
-        <div className="flex items-center justify-between">
-          <label className="text-[12px] text-[var(--ink-soft)]">Floor shadow</label>
-          <label className="relative w-10 h-[22px] cursor-pointer">
-            <input
-              type="checkbox"
-              className="sr-only peer"
-              checked={floorEnabled}
-              onChange={(e) => onFloorEnabledChange(e.target.checked)}
-            />
-            <div className="w-10 h-[22px] bg-[var(--surface-4)] rounded-full peer-checked:bg-[var(--gold)] transition-colors" />
-            <div className="absolute left-[3px] bottom-[3px] w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-[18px] shadow-sm" />
-          </label>
-        </div>
+        <Toggle label="Floor shadow" checked={floorEnabled} onChange={onFloorEnabledChange} />
       </Section>
     </>
   );
