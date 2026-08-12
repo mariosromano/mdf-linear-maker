@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import type { LinearParams, LightingPreset } from '../engine/types';
 import { MATERIALS, BIT_SIZE_IN, CARVE_DEPTH_IN } from '../engine/types';
 import type { LinearPattern } from '../engine/geometry';
@@ -130,6 +131,13 @@ export default function Viewport3D({
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     rendererRef.current = renderer;
     container.appendChild(renderer.domElement);
+
+    // Image-based environment lighting — soft studio reflections that make
+    // PBR materials read correctly at close zoom.
+    const pmrem = new THREE.PMREMGenerator(renderer);
+    scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environmentIntensity = 0.45;
+    pmrem.dispose();
 
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
@@ -350,9 +358,12 @@ export default function Viewport3D({
       normalScale: new THREE.Vector2(nmScale, nmScale),
     });
 
-    // Dynamic segment count — ~800K vertex budget across all panels
-    const vertsPerPanel = 800000 / panels.length;
-    const segsPerUnit = Math.min(128, Math.max(24, Math.floor(Math.sqrt(vertsPerPanel) / 2)));
+    // Dynamic segment count — ~2.4M vertex budget across all panels.
+    // At the 288 cap a 4-ft panel gets vertices every ~0.08 inch, enough to
+    // draw a 1-inch ball groove's cross-section with ~12 points so the
+    // hemisphere bottom stays round under an architect's close zoom.
+    const vertsPerPanel = 2400000 / panels.length;
+    const segsPerUnit = Math.min(288, Math.max(24, Math.floor(Math.sqrt(vertsPerPanel) / 2)));
 
     for (const p of panels) {
       const segX = Math.max(16, Math.round((segsPerUnit * p.w) / 2));

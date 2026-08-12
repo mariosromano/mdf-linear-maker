@@ -194,7 +194,7 @@ function waveStyle(ctx: ImageStyleContext): ImageStyleResult {
   const hw = wallW / 2, hh = wallH / 2;
   const base = parallelFamily(wallW, wallH, angleDeg, spacingFt, jitter, 'Uniform', rng);
   const wavelength = spacingFt * 3;
-  const step = wavelength / 8;
+  const step = wavelength / 12;
   const maxAmp = spacingFt * 0.45; // stay clear of the neighbor line
   const edges: Edge[] = [];
 
@@ -303,7 +303,7 @@ function contourStyle(ctx: ImageStyleContext): ImageStyleResult {
   const { wallW, wallH, angleDeg, spacingFt, jitter, sample, rng } = ctx;
   const hw = wallW / 2, hh = wallH / 2;
   const base = parallelFamily(wallW, wallH, angleDeg, spacingFt, jitter, 'Uniform', rng);
-  const step = Math.max(0.5 / 12, spacingFt / 2);
+  const step = Math.max(0.3 / 12, spacingFt / 3);
   const maxShift = spacingFt * 1.6; // how far a line can wander into its neighbors
   const edges: Edge[] = [];
 
@@ -345,7 +345,7 @@ function ribbonStyle(ctx: ImageStyleContext): ImageStyleResult {
   const hw = wallW / 2, hh = wallH / 2;
   const base = parallelFamily(wallW, wallH, angleDeg, spacingFt, jitter, 'Uniform', rng);
   const ctrlStep = Math.max(4 / 12, spacingFt * 1.5); // coarse → smooth flowing curves
-  const segsPerSpan = 6;
+  const segsPerSpan = 12;
   const maxShift = spacingFt * 1.6;
   const minDepth = 0.25; // ribbon stays continuous — never fades out entirely
   const edges: Edge[] = [];
