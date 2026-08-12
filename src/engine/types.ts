@@ -7,7 +7,7 @@ export type PatternType =
   | 'Image Lines'
   | 'Image Relief';
 export type DepthMode = 'Uniform' | 'Alternating' | 'Gradient' | 'Random';
-export type ImageStyle = 'Depth' | 'Wave' | 'Density' | 'Dimples';
+export type ImageStyle = 'Depth' | 'Wave' | 'Density' | 'Contour' | 'Dimples';
 export type BitSize = '1/4"' | '1/2"';
 export type BitProfile = 'Ball-end' | 'Flat-end';
 export type CarveDepth = '1/8"' | '1/4"' | '3/8"';
@@ -107,7 +107,7 @@ export interface ReliefField {
 /** Depth quantization steps for Image Lines (bounds DXF layer count). */
 export const IMAGE_DEPTH_LEVELS = 12;
 export const DEPTH_MODES: DepthMode[] = ['Uniform', 'Alternating', 'Gradient', 'Random'];
-export const IMAGE_STYLES: ImageStyle[] = ['Depth', 'Wave', 'Density', 'Dimples'];
+export const IMAGE_STYLES: ImageStyle[] = ['Depth', 'Wave', 'Density', 'Contour', 'Dimples'];
 export const BIT_SIZES: BitSize[] = ['1/4"', '1/2"'];
 export const BIT_PROFILES: BitProfile[] = ['Ball-end', 'Flat-end'];
 export const CARVE_DEPTHS: CarveDepth[] = ['1/8"', '1/4"', '3/8"'];

@@ -38,7 +38,9 @@ export default function App() {
 
   // Default library image so image modes have something to carve immediately
   useEffect(() => {
-    setImage((img) => img ?? presetToSourceImage('topography'));
+    presetToSourceImage('topography')
+      .then((src) => setImage((img) => img ?? src))
+      .catch(() => {});
   }, []);
 
   const handleImageUpload = useCallback((file: File) => {
@@ -52,12 +54,13 @@ export default function App() {
   }, []);
 
   const handleSelectPreset = useCallback((id: string) => {
-    const src = presetToSourceImage(id);
-    if (src) {
-      setImage(src);
-      setImageName(null);
-      setSelectedPresetId(id);
-    }
+    presetToSourceImage(id)
+      .then((src) => {
+        setImage(src);
+        setImageName(null);
+        setSelectedPresetId(id);
+      })
+      .catch(() => {});
   }, []);
 
   const pattern = useMemo(

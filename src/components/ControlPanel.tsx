@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import type { LinearParams, LightingPreset, PatternType } from '../engine/types';
 import {
   MATERIALS,
@@ -8,7 +8,7 @@ import {
   BIT_PROFILES,
   CARVE_DEPTHS,
 } from '../engine/types';
-import { IMAGE_PRESETS, presetThumbnails } from '../lib/imageLoader';
+import { IMAGE_PRESETS } from '../lib/imageLoader';
 
 const LINEAR_PATTERNS: PatternType[] = ['Parallel', 'Crosshatch', 'Chevron', 'Waves', 'Fan'];
 
@@ -202,8 +202,6 @@ export default function ControlPanel({
     }
   };
 
-  const thumbs = useMemo(() => presetThumbnails(), []);
-
   const isAngled =
     params.pattern === 'Parallel' || params.pattern === 'Crosshatch' || params.pattern === 'Image Lines';
   const isWavy = params.pattern === 'Chevron' || params.pattern === 'Waves';
@@ -354,7 +352,7 @@ export default function ControlPanel({
                       : 'border-transparent hover:border-[var(--line-strong)]'
                   }`}
                 >
-                  <img src={thumbs[p.id]} alt={p.name} className="w-full h-full object-cover" />
+                  <img src={p.thumb} alt={p.name} loading="lazy" className="w-full h-full object-cover" />
                 </button>
               ))}
             </div>
@@ -415,6 +413,7 @@ export default function ControlPanel({
                   {params.imageStyle === 'Depth' && 'Straight lines dive deeper where the image is dark.'}
                   {params.imageStyle === 'Wave' && 'Constant-depth lines wiggle harder where the image is dark.'}
                   {params.imageStyle === 'Density' && 'Lines bunch together where the image is dark, like an engraving.'}
+                  {params.imageStyle === 'Contour' && 'Lines shift and flow around the image features, like topo contours.'}
                   {params.imageStyle === 'Dimples' && 'Drill pecks on a staggered grid — deeper and wider where dark.'}
                 </p>
                 <Slider
