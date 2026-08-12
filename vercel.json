@@ -1,0 +1,10 @@
+{
+  "framework": "vite",
+  "buildCommand": "vite build",
+  "outputDirectory": "dist",
+  "functions": {
+    "api/render.js": {
+      "maxDuration": 60
+    }
+  }
+}

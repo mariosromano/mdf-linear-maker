@@ -1,0 +1,149 @@
+@import "tailwindcss";
+
+/* ──────────────────────────────────────────────────────────────
+   M|R Walls MDF Linear Maker — Premium design tokens
+   Warm black surfaces · champagne/gold accents · refined type
+   (shared design language with the Rib Maker)
+   ────────────────────────────────────────────────────────────── */
+:root {
+  /* Warm near-black surface ramp */
+  --surface-0: #141413;   /* deepest — viewport bg */
+  --surface-1: #1c1b19;   /* panel base */
+  --surface-2: #242320;   /* cards / sections */
+  --surface-3: #2d2b27;   /* elevated / hover */
+  --surface-4: #38352f;   /* controls / pressed */
+
+  /* Champagne / gold accent */
+  --gold: #c9a96a;        /* primary champagne accent */
+  --gold-bright: #e2c585; /* hover / highlight */
+  --gold-deep: #a8884c;   /* pressed / borders */
+
+  /* Text */
+  --ink: #f4f1ea;         /* warm white */
+  --ink-soft: #b8b3a8;    /* secondary */
+  --ink-muted: #837e74;   /* tertiary / labels */
+  --ink-faint: #5a564e;   /* hints */
+
+  /* Hairline borders */
+  --line: rgba(244, 241, 234, 0.08);
+  --line-strong: rgba(244, 241, 234, 0.14);
+
+  /* Positive (price/value) — muted sage, not neon */
+  --value: #a8c99a;
+}
+
+/* House theme when embedded in MakeReal (?theme=makereal) —
+   ivory surfaces, terracotta accent, dark ink. */
+[data-theme="makereal"] {
+  --surface-0: #f5f1e8;
+  --surface-1: #faf7f0;
+  --surface-2: #f0ebe0;
+  --surface-3: #e6e0d3;
+  --surface-4: #d9d2c2;
+
+  --gold: #d97757;
+  --gold-bright: #e08a6d;
+  --gold-deep: #b85f42;
+
+  --ink: #2a2620;
+  --ink-soft: #55503f;
+  --ink-muted: #837c6a;
+  --ink-faint: #aaa595;
+
+  --line: rgba(42, 38, 32, 0.1);
+  --line-strong: rgba(42, 38, 32, 0.18);
+
+  --value: #5a7a4a;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--surface-0);
+  color: var(--ink);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* Refined range slider — thin warm track, champagne thumb with ring */
+input[type="range"] {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--surface-4);
+  outline: none;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--gold);
+  cursor: pointer;
+  box-shadow: 0 0 0 4px rgba(201, 169, 106, 0.14), 0 1px 3px rgba(0,0,0,0.4);
+  transition: box-shadow 0.15s ease, background 0.15s ease;
+}
+input[type="range"]::-webkit-slider-thumb:hover {
+  background: var(--gold-bright);
+  box-shadow: 0 0 0 6px rgba(201, 169, 106, 0.2), 0 1px 3px rgba(0,0,0,0.4);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: var(--gold);
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 0 0 4px rgba(201, 169, 106, 0.14);
+}
+
+/* Custom scrollbar — slim, warm, unobtrusive */
+::-webkit-scrollbar {
+  width: 7px;
+  height: 7px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(244, 241, 234, 0.1);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(201, 169, 106, 0.4);
+}
+
+/* Color input — rounded, hairline border, no chunky chrome */
+input[type="color"] {
+  -webkit-appearance: none;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  cursor: pointer;
+  background: transparent;
+  padding: 0;
+}
+input[type="color"]::-webkit-color-swatch-wrapper { padding: 3px; }
+input[type="color"]::-webkit-color-swatch { border: none; border-radius: 5px; }
+
+/* Motion */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in-up { animation: fadeInUp 0.35s ease-out; }
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.animate-spin-slow { animation: spin 0.8s linear infinite; }
