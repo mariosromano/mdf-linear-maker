@@ -414,6 +414,7 @@ export default function ControlPanel({
                   {params.imageStyle === 'Wave' && 'Constant-depth lines wiggle harder where the image is dark.'}
                   {params.imageStyle === 'Density' && 'Lines bunch together where the image is dark, like an engraving.'}
                   {params.imageStyle === 'Contour' && 'Lines shift and flow around the image features, like topo contours.'}
+                  {params.imageStyle === 'Ribbon' && 'Silk-ribbon curves that flow sideways AND deepen with the image — the Textured Panel Maker look.'}
                   {params.imageStyle === 'Dimples' && 'Drill pecks on a staggered grid — deeper and wider where dark.'}
                 </p>
                 <Slider

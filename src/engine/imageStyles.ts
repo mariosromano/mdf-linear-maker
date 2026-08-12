@@ -333,6 +333,76 @@ function contourStyle(ctx: ImageStyleContext): ImageStyleResult {
   return { edges, lineCount: base.length };
 }
 
+/**
+ * Ribbon: the Textured Panel Maker's displacement logic as carve lines.
+ * Coarse control points are displaced sideways AND in depth by the image,
+ * then smoothed with a uniform cubic B-spline (TPM's approach) so the
+ * lines flow like silk ribbons — bunching around features while rising
+ * and falling with the image.
+ */
+function ribbonStyle(ctx: ImageStyleContext): ImageStyleResult {
+  const { wallW, wallH, angleDeg, spacingFt, jitter, sample, rng } = ctx;
+  const hw = wallW / 2, hh = wallH / 2;
+  const base = parallelFamily(wallW, wallH, angleDeg, spacingFt, jitter, 'Uniform', rng);
+  const ctrlStep = Math.max(4 / 12, spacingFt * 1.5); // coarse → smooth flowing curves
+  const segsPerSpan = 6;
+  const maxShift = spacingFt * 1.6;
+  const minDepth = 0.25; // ribbon stays continuous — never fades out entirely
+  const edges: Edge[] = [];
+
+  // Uniform cubic B-spline basis (TPM smooths its rows the same way)
+  const bspline = (p0: number, p1: number, p2: number, p3: number, t: number): number => {
+    const t2 = t * t, t3 = t2 * t;
+    return (
+      ((1 - 3 * t + 3 * t2 - t3) * p0 +
+        (4 - 6 * t2 + 3 * t3) * p1 +
+        (1 + 3 * t + 3 * t2 - 3 * t3) * p2 +
+        t3 * p3) / 6
+    );
+  };
+
+  for (const line of base) {
+    const dx = line.x1 - line.x0, dy = line.y1 - line.y0;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len < ctrlStep) continue;
+    const ux = dx / len, uy = dy / len;
+    const nx = -uy, ny = ux;
+
+    // Control points: position shifted sideways by the image, depth from it too
+    const nCtrl = Math.max(4, Math.ceil(len / ctrlStep) + 1);
+    const cxs: number[] = [], cys: number[] = [], cds: number[] = [];
+    for (let i = 0; i < nCtrl; i++) {
+      const t = (i / (nCtrl - 1)) * len;
+      const px = line.x0 + ux * t, py = line.y0 + uy * t;
+      const f = sample(px, py);
+      cxs.push(px + nx * maxShift * f);
+      cys.push(py + ny * maxShift * f);
+      cds.push(minDepth + (1 - minDepth) * f);
+    }
+    // Clamp ends so the spline reaches the wall edges
+    const at = (arr: number[], i: number) => arr[Math.max(0, Math.min(arr.length - 1, i))];
+
+    let px = 0, py = 0, pd = 0, has = false;
+    for (let span = -1; span < nCtrl; span++) {
+      for (let k = span === -1 ? 0 : 1; k <= segsPerSpan; k++) {
+        const t = k / segsPerSpan;
+        const wx = bspline(at(cxs, span - 1), at(cxs, span), at(cxs, span + 1), at(cxs, span + 2), t);
+        const wy = bspline(at(cys, span - 1), at(cys, span), at(cys, span + 1), at(cys, span + 2), t);
+        const wd = bspline(at(cds, span - 1), at(cds, span), at(cds, span + 1), at(cds, span + 2), t);
+        if (has) {
+          const clipped = clipSegment(px, py, wx, wy, -hw, -hh, hw, hh);
+          if (clipped) edges.push({ ...clipped, d: qLevel((pd + wd) / 2) });
+        }
+        px = wx;
+        py = wy;
+        pd = wd;
+        has = true;
+      }
+    }
+  }
+  return { edges, lineCount: base.length };
+}
+
 // ─── Registry ────────────────────────────────────────────────────
 export const IMAGE_STYLE_GENERATORS: Record<
   ImageStyle,
@@ -341,6 +411,7 @@ export const IMAGE_STYLE_GENERATORS: Record<
   Depth: depthStyle,
   Wave: waveStyle,
   Density: densityStyle,
-  Dimples: dimplesStyle,
   Contour: contourStyle,
+  Ribbon: ribbonStyle,
+  Dimples: dimplesStyle,
 };
