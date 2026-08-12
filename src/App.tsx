@@ -18,7 +18,7 @@ export default function App() {
   const [lightingPreset, setLightingPreset] = useState<LightingPreset>('studio');
   const [bgColor, setBgColor] = useState(FLAGS.makerealTheme ? '#f5f1e8' : '#141413');
   const [floorEnabled, setFloorEnabled] = useState(true);
-  const [trueDepth, setTrueDepth] = useState(false);
+  const [trueDepth, setTrueDepth] = useState(true);
   const [scaleFigureEnabled, setScaleFigureEnabled] = useState(true);
   const [renderOpen, setRenderOpen] = useState(false);
   const [image, setImage] = useState<SourceImage | null>(null);

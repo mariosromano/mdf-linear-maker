@@ -8,7 +8,7 @@ export type PatternType =
   | 'Image Relief';
 export type DepthMode = 'Uniform' | 'Alternating' | 'Gradient' | 'Random';
 export type ImageStyle = 'Depth' | 'Wave' | 'Density' | 'Contour' | 'Ribbon' | 'Dimples';
-export type BitSize = '1/4"' | '1/2"';
+export type BitSize = '1/4"' | '1/2"' | '1"';
 export type BitProfile = 'Ball-end' | 'Flat-end';
 export type CarveDepth = '1/8"' | '1/4"' | '3/8"';
 export type LightingPreset = 'studio' | 'gallery' | 'raking';
@@ -108,12 +108,12 @@ export interface ReliefField {
 export const IMAGE_DEPTH_LEVELS = 12;
 export const DEPTH_MODES: DepthMode[] = ['Uniform', 'Alternating', 'Gradient', 'Random'];
 export const IMAGE_STYLES: ImageStyle[] = ['Depth', 'Wave', 'Density', 'Contour', 'Ribbon', 'Dimples'];
-export const BIT_SIZES: BitSize[] = ['1/4"', '1/2"'];
+export const BIT_SIZES: BitSize[] = ['1/4"', '1/2"', '1"'];
 export const BIT_PROFILES: BitProfile[] = ['Ball-end', 'Flat-end'];
 export const CARVE_DEPTHS: CarveDepth[] = ['1/8"', '1/4"', '3/8"'];
 
 export const CARVE_DEPTH_IN: Record<CarveDepth, number> = { '1/8"': 0.125, '1/4"': 0.25, '3/8"': 0.375 };
-export const BIT_SIZE_IN: Record<BitSize, number> = { '1/4"': 0.25, '1/2"': 0.5 };
+export const BIT_SIZE_IN: Record<BitSize, number> = { '1/4"': 0.25, '1/2"': 0.5, '1"': 1.0 };
 
 /** Shallowest line as a fraction of max depth when depthMode varies depth. */
 export const MIN_DEPTH_FACTOR = 0.35;
