@@ -1,6 +1,6 @@
-import type { BitProfile, Edge, Panel } from './types';
+import type { BitProfile, Edge, Panel, ReliefField } from './types';
 import { PANEL_THICKNESS_IN } from './types';
-import { generateHeightField } from './textures';
+import { combineHeightFields, generateHeightField, generateReliefHeightField } from './textures';
 
 // ─── DXF Export (2D cut file — drives the CNC) ───────────────────
 // Pattern lines are grouped by carve depth: one layer per depth
@@ -93,7 +93,8 @@ export function buildSTL(
   wallH: number,
   bitRadiusFt: number,
   maxDepthFt: number,
-  bitProfile: BitProfile
+  bitProfile: BitProfile,
+  relief: ReliefField | null = null
 ): ArrayBuffer {
   // Sample density: budget-limited so front tris ≤ ~half the cap
   const budgetCells = MAX_STL_TRIANGLES / 2 / 2; // front quads
@@ -104,7 +105,11 @@ export function buildSTL(
   const ny = Math.max(2, Math.round(wallH * samplesPerFt) + 1);
 
   // Height field at grid resolution (row 0 = top of wall, canvas convention)
-  const hf = generateHeightField(edges, wallW, wallH, bitRadiusFt, maxDepthFt, bitProfile, nx, ny);
+  let hf = generateHeightField(edges, wallW, wallH, bitRadiusFt, maxDepthFt, bitProfile, nx, ny);
+  if (relief) {
+    const rf = generateReliefHeightField(relief, wallW, wallH, maxDepthFt, nx, ny);
+    hf = edges.length > 0 ? combineHeightFields(hf, rf) : rf;
+  }
 
   const T = PANEL_THICKNESS_IN; // slab thickness, inches
   const wIn = wallW * 12, hIn = wallH * 12;

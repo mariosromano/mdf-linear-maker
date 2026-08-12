@@ -1,4 +1,11 @@
-export type PatternType = 'Parallel' | 'Crosshatch' | 'Chevron' | 'Waves' | 'Fan';
+export type PatternType =
+  | 'Parallel'
+  | 'Crosshatch'
+  | 'Chevron'
+  | 'Waves'
+  | 'Fan'
+  | 'Image Lines'
+  | 'Image Relief';
 export type DepthMode = 'Uniform' | 'Alternating' | 'Gradient' | 'Random';
 export type BitSize = '1/4"' | '1/2"';
 export type BitProfile = 'Ball-end' | 'Flat-end';
@@ -16,6 +23,8 @@ export interface LinearParams {
   waveAmplitude: number; // inches (Chevron/Waves)
   wavePeriod: number;    // inches (Chevron/Waves)
   depthMode: DepthMode;
+  imageInvert: boolean;  // false: dark areas carve deepest; true: light areas
+  imageSmooth: number;   // 0..10 blur radius (source pixels) before depth mapping
   bitSize: BitSize;
   bitProfile: BitProfile;
   carveDepth: CarveDepth; // maximum carve depth — depthMode scales per line
@@ -68,7 +77,32 @@ export const MATERIALS: Record<string, MaterialDef> = {
   'Raw Aluminum': { color: '#b8bcc2', roughness: 0.3,  metalness: 0.9 },
 };
 
-export const PATTERNS: PatternType[] = ['Parallel', 'Crosshatch', 'Chevron', 'Waves', 'Fan'];
+export const PATTERNS: PatternType[] = [
+  'Parallel',
+  'Crosshatch',
+  'Chevron',
+  'Waves',
+  'Fan',
+  'Image Lines',
+  'Image Relief',
+];
+
+/** Uploaded (or default) source image as luminance 0..1, row-major. */
+export interface SourceImage {
+  lum: Float32Array;
+  w: number;
+  h: number;
+}
+
+/** Processed relief: per-pixel depth factor 0..1 (1 = full carve depth). */
+export interface ReliefField {
+  data: Float32Array;
+  w: number;
+  h: number;
+}
+
+/** Depth quantization steps for Image Lines (bounds DXF layer count). */
+export const IMAGE_DEPTH_LEVELS = 12;
 export const DEPTH_MODES: DepthMode[] = ['Uniform', 'Alternating', 'Gradient', 'Random'];
 export const BIT_SIZES: BitSize[] = ['1/4"', '1/2"'];
 export const BIT_PROFILES: BitProfile[] = ['Ball-end', 'Flat-end'];
@@ -94,6 +128,8 @@ export const DEFAULT_PARAMS: LinearParams = {
   waveAmplitude: 3,
   wavePeriod: 16,
   depthMode: 'Alternating',
+  imageInvert: false,
+  imageSmooth: 2,
   bitSize: '1/2"',
   bitProfile: 'Ball-end',
   carveDepth: '1/4"',

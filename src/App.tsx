@@ -4,6 +4,8 @@ import type { LinearParams, LightingPreset } from './engine/types';
 import { computePattern, panelBreakdown } from './engine/geometry';
 import { calculatePricing, fmtPrice, PRICE_PER_SQFT } from './engine/pricing';
 import { readBridgeFlags, readInitialParams, reportDesign } from './lib/bridge';
+import { defaultSourceImage, fileToSourceImage } from './lib/imageLoader';
+import type { SourceImage } from './engine/types';
 import Viewport3D from './components/Viewport3D';
 import ControlPanel from './components/ControlPanel';
 import ExportBar from './components/ExportBar';
@@ -18,6 +20,8 @@ export default function App() {
   const [floorEnabled, setFloorEnabled] = useState(true);
   const [scaleFigureEnabled, setScaleFigureEnabled] = useState(true);
   const [renderOpen, setRenderOpen] = useState(false);
+  const [image, setImage] = useState<SourceImage | null>(null);
+  const [imageName, setImageName] = useState<string | null>(null);
   const [presentationMode, setPresentationMode] = useState(false);
 
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -31,7 +35,24 @@ export default function App() {
     return () => clearTimeout(t);
   }, [params]);
 
-  const pattern = useMemo(() => computePattern(debouncedParams), [debouncedParams]);
+  // Built-in demo image so image modes have something to carve immediately
+  useEffect(() => {
+    setImage((img) => img ?? defaultSourceImage());
+  }, []);
+
+  const handleImageUpload = useCallback((file: File) => {
+    fileToSourceImage(file)
+      .then((src) => {
+        setImage(src);
+        setImageName(file.name);
+      })
+      .catch(() => {});
+  }, []);
+
+  const pattern = useMemo(
+    () => computePattern(debouncedParams, image),
+    [debouncedParams, image]
+  );
 
   // Maker Contract: report design changes to the MakeReal platform
   useEffect(() => {
@@ -211,6 +232,8 @@ export default function App() {
               params={params}
               onParamsChange={setParams}
               onRandomize={handleRandomize}
+              imageName={imageName}
+              onImageUpload={handleImageUpload}
               lightingPreset={lightingPreset}
               onLightingPresetChange={setLightingPreset}
               bgColor={bgColor}

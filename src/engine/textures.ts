@@ -1,4 +1,5 @@
-import type { BitProfile, Edge, Panel } from './types';
+import type { BitProfile, Edge, Panel, ReliefField } from './types';
+import { makeWallSampler } from './geometry';
 
 // ─── Height field (distance-field groove carving) ────────────────
 // Computes mathematically exact groove profiles per bit type.
@@ -91,6 +92,38 @@ export function generateHeightField(
   }
 
   return heightmap;
+}
+
+// ─── Relief height field (Image Relief mode) ─────────────────────
+// Continuous 2.5D carve: image depth factor × max depth at every pixel.
+export function generateReliefHeightField(
+  relief: ReliefField,
+  wallW: number,
+  wallH: number,
+  maxDepthFt: number,
+  resW: number,
+  resH: number
+): Float32Array {
+  const heightmap = new Float32Array(resW * resH);
+  const sample = makeWallSampler(relief, wallW, wallH);
+  const hw = wallW / 2, hh = wallH / 2;
+  const ftPerPxX = wallW / resW, ftPerPxY = wallH / resH;
+  for (let py = 0; py < resH; py++) {
+    const y = hh - (py + 0.5) * ftPerPxY;
+    const rowOff = py * resW;
+    for (let px = 0; px < resW; px++) {
+      const x = -hw + (px + 0.5) * ftPerPxX;
+      heightmap[rowOff + px] = sample(x, y) * maxDepthFt;
+    }
+  }
+  return heightmap;
+}
+
+/** Element-wise max of two height fields (grooves ∪ relief). */
+export function combineHeightFields(a: Float32Array, b: Float32Array): Float32Array {
+  const out = new Float32Array(a.length);
+  for (let i = 0; i < a.length; i++) out[i] = a[i] > b[i] ? a[i] : b[i];
+  return out;
 }
 
 // ─── Height field → displacement canvas ──────────────────────────

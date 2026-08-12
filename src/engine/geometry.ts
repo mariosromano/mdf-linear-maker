@@ -1,5 +1,5 @@
-import type { DepthMode, Edge, LinearParams, Panel } from './types';
-import { MIN_DEPTH_FACTOR } from './types';
+import type { DepthMode, Edge, LinearParams, Panel, ReliefField, SourceImage } from './types';
+import { IMAGE_DEPTH_LEVELS, MIN_DEPTH_FACTOR } from './types';
 
 // ─── Seeded RNG ─────────────────────────────────────────────────
 export function mulberry32(seed: number): () => number {
@@ -154,7 +154,137 @@ function fanFamily(
   return edges;
 }
 
-function generatePattern(params: LinearParams): { edges: Edge[]; lineCount: number } {
+// ─── Image processing ────────────────────────────────────────────
+
+/** Separable box blur on a luminance field (radius in source pixels). */
+function boxBlur(src: Float32Array, w: number, h: number, radius: number): Float32Array {
+  const r = Math.round(radius);
+  if (r <= 0) return src;
+  const tmp = new Float32Array(w * h);
+  const out = new Float32Array(w * h);
+  const norm = 1 / (2 * r + 1);
+  // Horizontal pass
+  for (let y = 0; y < h; y++) {
+    const row = y * w;
+    let acc = 0;
+    for (let x = -r; x <= r; x++) acc += src[row + Math.max(0, Math.min(w - 1, x))];
+    for (let x = 0; x < w; x++) {
+      tmp[row + x] = acc * norm;
+      const xAdd = Math.min(w - 1, x + r + 1);
+      const xSub = Math.max(0, x - r);
+      acc += src[row + xAdd] - src[row + xSub];
+    }
+  }
+  // Vertical pass
+  for (let x = 0; x < w; x++) {
+    let acc = 0;
+    for (let y = -r; y <= r; y++) acc += tmp[Math.max(0, Math.min(h - 1, y)) * w + x];
+    for (let y = 0; y < h; y++) {
+      out[y * w + x] = acc * norm;
+      const yAdd = Math.min(h - 1, y + r + 1);
+      const ySub = Math.max(0, y - r);
+      acc += tmp[yAdd * w + x] - tmp[ySub * w + x];
+    }
+  }
+  return out;
+}
+
+/** Luminance image → per-pixel depth factor (0..1), with blur + polarity. */
+export function processImage(image: SourceImage, invert: boolean, smooth: number): ReliefField {
+  const blurred = boxBlur(image.lum, image.w, image.h, smooth);
+  const data = new Float32Array(image.w * image.h);
+  for (let i = 0; i < data.length; i++) {
+    const lum = blurred[i];
+    data[i] = invert ? lum : 1 - lum; // default: dark carves deepest
+  }
+  return { data, w: image.w, h: image.h };
+}
+
+/**
+ * Sampler mapping wall space (feet, centered origin, y up) → relief depth
+ * factor. The image cover-fits the wall: fills it completely, center-cropped.
+ */
+export function makeWallSampler(
+  relief: ReliefField,
+  wallW: number,
+  wallH: number
+): (x: number, y: number) => number {
+  const { data, w, h } = relief;
+  const scale = Math.max((w - 1) / wallW, (h - 1) / wallH); // px per foot, cover
+  const cx = (w - 1) / 2, cy = (h - 1) / 2;
+  return (x: number, y: number): number => {
+    const px = Math.max(0, Math.min(w - 1.001, cx + x * scale));
+    const py = Math.max(0, Math.min(h - 1.001, cy - y * scale)); // y up → row down
+    const x0 = px | 0, y0 = py | 0;
+    const fx = px - x0, fy = py - y0;
+    const i00 = data[y0 * w + x0];
+    const i10 = data[y0 * w + x0 + 1];
+    const i01 = data[(y0 + 1) * w + x0];
+    const i11 = data[(y0 + 1) * w + x0 + 1];
+    return (i00 * (1 - fx) + i10 * fx) * (1 - fy) + (i01 * (1 - fx) + i11 * fx) * fy;
+  };
+}
+
+/**
+ * Image Lines: parallel lines whose depth follows the image. Each line is
+ * walked in ~1" steps, depth quantized to IMAGE_DEPTH_LEVELS and merged
+ * into runs; near-zero depths are skipped so highlights become uncarved.
+ */
+function imageLineFamily(
+  wallW: number, wallH: number,
+  angleDeg: number, spacingFt: number, jitter: number,
+  sample: (x: number, y: number) => number,
+  rng: () => number
+): { edges: Edge[]; lineCount: number } {
+  const base = parallelFamily(wallW, wallH, angleDeg, spacingFt, jitter, 'Uniform', rng);
+  const stepFt = 1 / 12; // sample every inch along the line
+  const cutoff = 0.075;  // below this factor, leave the surface uncarved
+  const edges: Edge[] = [];
+
+  for (const line of base) {
+    const dx = line.x1 - line.x0, dy = line.y1 - line.y0;
+    const len = Math.sqrt(dx * dx + dy * dy);
+    if (len < stepFt) continue;
+    const n = Math.ceil(len / stepFt);
+    const ux = dx / len, uy = dy / len;
+
+    let runStart = -1;
+    let runLevel = -1;
+    const flush = (endIdx: number) => {
+      if (runStart < 0) return;
+      const s = runStart * stepFt, e = Math.min(endIdx * stepFt, len);
+      edges.push({
+        x0: line.x0 + ux * s, y0: line.y0 + uy * s,
+        x1: line.x0 + ux * e, y1: line.y0 + uy * e,
+        d: runLevel / IMAGE_DEPTH_LEVELS,
+      });
+      runStart = -1;
+    };
+
+    for (let i = 0; i <= n; i++) {
+      const t = Math.min(i * stepFt, len);
+      const f = sample(line.x0 + ux * t, line.y0 + uy * t);
+      const level = f < cutoff ? 0 : Math.max(1, Math.round(f * IMAGE_DEPTH_LEVELS));
+      if (level !== runLevel) {
+        flush(i);
+        if (level > 0) {
+          runStart = i;
+          runLevel = level;
+        } else {
+          runLevel = 0;
+        }
+      }
+    }
+    flush(n);
+  }
+
+  return { edges, lineCount: base.length };
+}
+
+function generatePattern(
+  params: LinearParams,
+  relief: ReliefField | null
+): { edges: Edge[]; lineCount: number } {
   const { wallWidth: w, wallHeight: h, pattern, jitter, depthMode } = params;
   const rng = mulberry32(params.seed);
   const spacingFt = Math.max(0.5 / 12, params.spacing / 12);
@@ -205,6 +335,19 @@ function generatePattern(params: LinearParams): { edges: Edge[]; lineCount: numb
     case 'Fan':
       edges = fanFamily(w, h, spacingFt, jitter, depthMode, rng);
       lineCount = edges.length;
+      break;
+
+    case 'Image Lines': {
+      if (!relief) break;
+      const sample = makeWallSampler(relief, w, h);
+      const result = imageLineFamily(w, h, params.angle, spacingFt, jitter, sample, rng);
+      edges = result.edges;
+      lineCount = result.lineCount;
+      break;
+    }
+
+    case 'Image Relief':
+      // No line edges — the relief field itself is the carve geometry.
       break;
   }
 
@@ -262,10 +405,23 @@ export interface LinearPattern {
   wallW: number;
   wallH: number;
   lineCount: number;
+  /** Present only in Image Relief mode — continuous depth field. */
+  relief: ReliefField | null;
 }
 
-export function computePattern(params: LinearParams): LinearPattern {
-  const { edges, lineCount } = generatePattern(params);
+export function computePattern(params: LinearParams, image: SourceImage | null): LinearPattern {
+  const isImageMode = params.pattern === 'Image Lines' || params.pattern === 'Image Relief';
+  const relief = isImageMode && image
+    ? processImage(image, params.imageInvert, params.imageSmooth)
+    : null;
+  const { edges, lineCount } = generatePattern(params, relief);
   const panels = tilePanels(params.wallWidth, params.wallHeight);
-  return { edges, panels, wallW: params.wallWidth, wallH: params.wallHeight, lineCount };
+  return {
+    edges,
+    panels,
+    wallW: params.wallWidth,
+    wallH: params.wallHeight,
+    lineCount,
+    relief: params.pattern === 'Image Relief' ? relief : null,
+  };
 }

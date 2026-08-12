@@ -37,7 +37,7 @@ export default function ExportBar({
   }, [rendererRef, sceneRef, cameraRef]);
 
   const handleExportDXF = useCallback(() => {
-    if (pattern.edges.length === 0) return;
+    if (pattern.edges.length === 0 && !pattern.relief) return;
     const dxf = buildDXF(
       pattern.edges,
       pattern.panels,
@@ -49,7 +49,7 @@ export default function ExportBar({
   }, [pattern, params.carveDepth]);
 
   const handleExportSTL = useCallback(() => {
-    if (pattern.edges.length === 0 || stlBusy) return;
+    if ((pattern.edges.length === 0 && !pattern.relief) || stlBusy) return;
     setStlBusy(true);
     // Yield a frame so the busy state paints before the heavy mesh build
     setTimeout(() => {
@@ -62,7 +62,8 @@ export default function ExportBar({
           pattern.wallH,
           bitRadiusFt,
           carveDepthFt,
-          params.bitProfile
+          params.bitProfile,
+          pattern.relief
         );
         downloadBlob(stl, 'mr-linear-wall.stl', 'model/stl');
       } finally {

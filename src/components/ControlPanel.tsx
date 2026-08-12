@@ -13,6 +13,8 @@ interface ControlPanelProps {
   params: LinearParams;
   onParamsChange: React.Dispatch<React.SetStateAction<LinearParams>>;
   onRandomize: () => void;
+  imageName: string | null;
+  onImageUpload: (file: File) => void;
   lightingPreset: LightingPreset;
   onLightingPresetChange: (preset: LightingPreset) => void;
   bgColor: string;
@@ -129,6 +131,8 @@ export default function ControlPanel({
   params,
   onParamsChange,
   onRandomize,
+  imageName,
+  onImageUpload,
   lightingPreset,
   onLightingPresetChange,
   bgColor,
@@ -139,8 +143,12 @@ export default function ControlPanel({
   const set = <K extends keyof LinearParams>(key: K, value: LinearParams[K]) =>
     onParamsChange((p) => ({ ...p, [key]: value }));
 
-  const isAngled = params.pattern === 'Parallel' || params.pattern === 'Crosshatch';
+  const isImage = params.pattern === 'Image Lines' || params.pattern === 'Image Relief';
+  const isAngled =
+    params.pattern === 'Parallel' || params.pattern === 'Crosshatch' || params.pattern === 'Image Lines';
   const isWavy = params.pattern === 'Chevron' || params.pattern === 'Waves';
+  const hasSpacing = params.pattern !== 'Image Relief';
+  const hasJitter = params.pattern !== 'Image Relief';
 
   return (
     <>
@@ -178,6 +186,52 @@ export default function ControlPanel({
           ))}
         </div>
 
+        {isImage && (
+          <div className="mb-3.5">
+            <div className="text-[12px] text-[var(--ink-soft)] mb-1.5">Image</div>
+            <label className="flex items-center justify-center gap-2 w-full py-2.5 rounded-lg border border-dashed border-[var(--line-strong)] bg-[var(--surface-1)] text-[12px] text-[var(--ink-soft)] hover:text-[var(--ink)] hover:border-[var(--gold-deep)] cursor-pointer transition-colors">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+              {imageName ? 'Replace image' : 'Upload image'}
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) onImageUpload(f);
+                  e.target.value = '';
+                }}
+              />
+            </label>
+            <p className="text-[10.5px] text-[var(--ink-faint)] mt-1.5 leading-relaxed truncate">
+              {imageName ? `Loaded: ${imageName}` : 'Using the built-in M|R demo image.'}
+              {' '}Dark areas carve deepest.
+            </p>
+            <div className="flex items-center justify-between mt-2.5 mb-3">
+              <label className="text-[12px] text-[var(--ink-soft)]">Invert (carve light areas)</label>
+              <label className="relative w-10 h-[22px] cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="sr-only peer"
+                  checked={params.imageInvert}
+                  onChange={(e) => set('imageInvert', e.target.checked)}
+                />
+                <div className="w-10 h-[22px] bg-[var(--surface-4)] rounded-full peer-checked:bg-[var(--gold)] transition-colors" />
+                <div className="absolute left-[3px] bottom-[3px] w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-[18px] shadow-sm" />
+              </label>
+            </div>
+            <Slider
+              label="Smoothing"
+              value={params.imageSmooth}
+              min={0} max={10} step={1}
+              format={(v) => `${v}px`}
+              onChange={(v) => set('imageSmooth', v)}
+              info="Blurs the image before depth mapping — higher is softer relief."
+            />
+          </div>
+        )}
+
+        {hasSpacing && (
         <Slider
           label="Line Spacing"
           value={params.spacing}
@@ -185,6 +239,7 @@ export default function ControlPanel({
           format={(v) => `${v}″`}
           onChange={(v) => set('spacing', v)}
         />
+        )}
 
         {isAngled && (
           <Slider
@@ -226,6 +281,7 @@ export default function ControlPanel({
           </>
         )}
 
+        {hasJitter && (
         <Slider
           label="Jitter"
           value={params.jitter}
@@ -234,6 +290,7 @@ export default function ControlPanel({
           onChange={(v) => set('jitter', v)}
           info="Random offset per line — 0% is perfectly regular."
         />
+        )}
 
         <button
           onClick={onRandomize}
@@ -247,11 +304,21 @@ export default function ControlPanel({
         <Segmented label="Bit Size" value={params.bitSize} options={BIT_SIZES} onChange={(v) => set('bitSize', v)} />
         <Segmented label="Bit Profile" value={params.bitProfile} options={BIT_PROFILES} onChange={(v) => set('bitProfile', v)} />
         <Segmented label="Max Carve Depth" value={params.carveDepth} options={CARVE_DEPTHS} onChange={(v) => set('carveDepth', v)} />
-        <Segmented label="Depth Variation" value={params.depthMode} options={DEPTH_MODES} onChange={(v) => set('depthMode', v)} />
-        <p className="text-[10.5px] text-[var(--ink-faint)] mt-1.5 leading-relaxed">
-          Depth variation carves each line at a different depth — Alternating
-          pairs deep and shallow lines, Gradient ramps across the wall.
-        </p>
+        {!isImage && (
+          <>
+            <Segmented label="Depth Variation" value={params.depthMode} options={DEPTH_MODES} onChange={(v) => set('depthMode', v)} />
+            <p className="text-[10.5px] text-[var(--ink-faint)] mt-1.5 leading-relaxed">
+              Depth variation carves each line at a different depth — Alternating
+              pairs deep and shallow lines, Gradient ramps across the wall.
+            </p>
+          </>
+        )}
+        {isImage && (
+          <p className="text-[10.5px] text-[var(--ink-faint)] mt-1.5 leading-relaxed">
+            Carve depth follows the image — Max Carve Depth sets the darkest
+            (deepest) point.
+          </p>
+        )}
       </Section>
 
       <Section title="Material">

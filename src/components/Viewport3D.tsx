@@ -6,6 +6,8 @@ import { MATERIALS, BIT_SIZE_IN, CARVE_DEPTH_IN } from '../engine/types';
 import type { LinearPattern } from '../engine/geometry';
 import {
   generateHeightField,
+  generateReliefHeightField,
+  combineHeightFields,
   heightFieldToCanvas,
   drawPanelSeams,
   generateNormalMap,
@@ -269,8 +271,8 @@ export default function Viewport3D({
     for (const m of materials) m.dispose();
     panelGroup.clear();
 
-    const { edges, panels, wallW, wallH } = pattern;
-    if (edges.length === 0) return;
+    const { edges, panels, wallW, wallH, relief } = pattern;
+    if (edges.length === 0 && !relief) return;
 
     const bitDiamFt = BIT_SIZE_IN[params.bitSize] / 12;
     const carveDepthIn = CARVE_DEPTH_IN[params.carveDepth];
@@ -282,9 +284,13 @@ export default function Viewport3D({
     const resW = Math.round(wallW * pxPerFt);
     const resH = Math.round(wallH * pxPerFt);
 
-    const heightField = generateHeightField(
+    let heightField = generateHeightField(
       edges, wallW, wallH, bitDiamFt / 2, carveDepthFt, params.bitProfile, resW, resH
     );
+    if (relief) {
+      const reliefField = generateReliefHeightField(relief, wallW, wallH, carveDepthFt, resW, resH);
+      heightField = edges.length > 0 ? combineHeightFields(heightField, reliefField) : reliefField;
+    }
     const dispCanvas = heightFieldToCanvas(heightField, resW, resH, carveDepthFt);
     drawPanelSeams(dispCanvas, panels, wallW, wallH);
 
