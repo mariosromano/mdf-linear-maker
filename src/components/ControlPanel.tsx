@@ -26,6 +26,8 @@ interface ControlPanelProps {
   onBgColorChange: (color: string) => void;
   floorEnabled: boolean;
   onFloorEnabledChange: (enabled: boolean) => void;
+  trueDepth: boolean;
+  onTrueDepthChange: (enabled: boolean) => void;
 }
 
 function Section({
@@ -172,6 +174,8 @@ export default function ControlPanel({
   onBgColorChange,
   floorEnabled,
   onFloorEnabledChange,
+  trueDepth,
+  onTrueDepthChange,
 }: ControlPanelProps) {
   const set = <K extends keyof LinearParams>(key: K, value: LinearParams[K]) =>
     onParamsChange((p) => ({ ...p, [key]: value }));
@@ -498,6 +502,11 @@ export default function ControlPanel({
           />
         </div>
         <Toggle label="Floor shadow" checked={floorEnabled} onChange={onFloorEnabledChange} />
+        <Toggle label="True depth (1:1)" checked={trueDepth} onChange={onTrueDepthChange} />
+        <p className="text-[10.5px] text-[var(--ink-faint)] mt-1.5 leading-relaxed">
+          Off: carve depth is exaggerated so texture reads at room scale.
+          On: the 3D view shows exact dimensional depth, like the exports.
+        </p>
       </Section>
     </>
   );

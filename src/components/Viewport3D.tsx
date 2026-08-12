@@ -17,6 +17,7 @@ interface Viewport3DProps {
   pattern: LinearPattern;
   lightingPreset: LightingPreset;
   bgColor: string;
+  trueDepth: boolean;
   floorEnabled: boolean;
   scaleFigureEnabled: boolean;
   rendererRef: React.MutableRefObject<THREE.WebGLRenderer | null>;
@@ -65,6 +66,7 @@ export default function Viewport3D({
   pattern,
   lightingPreset,
   bgColor,
+  trueDepth,
   floorEnabled,
   scaleFigureEnabled,
   rendererRef,
@@ -330,11 +332,11 @@ export default function Viewport3D({
 
     const matPreset = MATERIALS[params.material] ?? MATERIALS['White Oak'];
 
-    // Exaggerate displacement so carve depth is clearly visible in the 3D
-    // view — more for continuous relief, whose gentle slopes read weakly at
-    // wall scale. (DXF and STL exports remain dimensionally accurate.)
+    // Displacement scale: exaggerated for visibility by default (more for
+    // continuous relief, whose gentle slopes read weakly at wall scale), or
+    // 1:1 when True Depth is on. Exports are always dimensionally accurate.
     const isRelief = !!relief && edges.length === 0;
-    const dispScale = carveDepthFt * (isRelief ? 6 : 3);
+    const dispScale = carveDepthFt * (trueDepth ? 1 : isRelief ? 6 : 3);
     const nmScale = (0.8 + (carveDepthIn / 0.375) * 1.2) * (isRelief ? 2 : 1);
 
     const panelMat = new THREE.MeshStandardMaterial({
@@ -400,7 +402,7 @@ export default function Viewport3D({
     if (figureRef.current) {
       figureRef.current.position.set(wallW / 2 + 2.2, 0, 1.2);
     }
-  }, [pattern, params.bitSize, params.bitProfile, params.carveDepth, params.material, rendererRef]);
+  }, [pattern, params.bitSize, params.bitProfile, params.carveDepth, params.material, trueDepth, rendererRef]);
 
   // ── Camera refit whenever wall dimensions change ──
   useEffect(() => {
