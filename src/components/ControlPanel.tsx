@@ -9,6 +9,8 @@ import {
   CARVE_DEPTHS,
 } from '../engine/types';
 import { IMAGE_PRESETS } from '../lib/imageLoader';
+import { BIT_SIZE_IN, CARVE_DEPTH_IN } from '../engine/types';
+import { grooveHalfWidthIn, grooveProfilePoints } from '../engine/bitProfile';
 
 const LINEAR_PATTERNS: PatternType[] = ['Parallel', 'Crosshatch', 'Chevron', 'Waves', 'Fan'];
 
@@ -156,6 +158,79 @@ function Toggle({
         <div className="w-10 h-[22px] bg-[var(--surface-4)] rounded-full peer-checked:bg-[var(--gold)] transition-colors" />
         <div className="absolute left-[3px] bottom-[3px] w-4 h-4 bg-white rounded-full transition-transform peer-checked:translate-x-[18px] shadow-sm" />
       </label>
+    </div>
+  );
+}
+
+/**
+ * Live groove cross-section, drawn to scale from the same math the carve
+ * engine uses. Shows the bit outline and real measurements so the width
+ * and shoulder-curvature difference between bits is legible at a glance.
+ */
+function BitDiagram({
+  bitSizeIn,
+  depthIn,
+  profile,
+}: {
+  bitSizeIn: number;
+  depthIn: number;
+  profile: 'Ball-end' | 'Flat-end';
+}) {
+  const R = bitSizeIn / 2;
+  const hw = grooveHalfWidthIn(R, depthIn, profile);
+  const pts = grooveProfilePoints(R, depthIn, profile);
+
+  // Fixed physical window so switching bits visibly changes the groove:
+  // 1.6" of material width, 0.55" of depth below the surface.
+  const VIEW_W = 232, VIEW_H = 92;
+  const PAD_X = 8, SURFACE_Y = 26;
+  const IN_W = 1.6;
+  const pxPerIn = (VIEW_W - 2 * PAD_X) / IN_W;
+  const cx = VIEW_W / 2;
+  const sx = (xIn: number) => cx + xIn * pxPerIn;
+  const sy = (dIn: number) => SURFACE_Y + dIn * pxPerIn * 0.9; // slight vertical squeeze fits 3/8"
+
+  // Material outline with the groove cut out of the top surface
+  const left = PAD_X, right = VIEW_W - PAD_X, bottom = VIEW_H - 6;
+  const groovePath = pts.map(([x, d]) => `${sx(x).toFixed(1)},${sy(d).toFixed(1)}`).join(' ');
+  const material = `M ${left} ${sy(0)} L ${sx(-hw).toFixed(1)} ${sy(0)} ` +
+    pts.map(([x, d]) => `L ${sx(x).toFixed(1)} ${sy(d).toFixed(1)}`).join(' ') +
+    ` L ${right} ${sy(0)} L ${right} ${bottom} L ${left} ${bottom} Z`;
+
+  // Bit ghost: circle for ball (center at depth D - R), rectangle for flat
+  const bitCy = sy(depthIn - R);
+
+  return (
+    <div className="mt-1 mb-3.5 rounded-lg border border-[var(--line)] bg-[var(--surface-1)] px-2 pt-1 pb-2">
+      <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} className="w-full">
+        {/* material */}
+        <path d={material} fill="var(--surface-3)" stroke="var(--line-strong)" strokeWidth="1" />
+        {/* groove outline emphasized */}
+        <polyline points={groovePath} fill="none" stroke="var(--gold)" strokeWidth="1.5" />
+        {/* bit ghost */}
+        {profile === 'Ball-end' ? (
+          <circle cx={cx} cy={bitCy} r={R * pxPerIn * 0.9} fill="none"
+            stroke="var(--ink-muted)" strokeWidth="1" strokeDasharray="3 3" />
+        ) : (
+          <rect x={sx(-R)} y={sy(depthIn) - R * pxPerIn * 1.4} width={2 * R * pxPerIn}
+            height={R * pxPerIn * 1.4} fill="none"
+            stroke="var(--ink-muted)" strokeWidth="1" strokeDasharray="3 3" />
+        )}
+        {/* width dimension */}
+        <line x1={sx(-hw)} y1={14} x2={sx(hw)} y2={14} stroke="var(--ink-faint)" strokeWidth="1" />
+        <line x1={sx(-hw)} y1={10} x2={sx(-hw)} y2={18} stroke="var(--ink-faint)" strokeWidth="1" />
+        <line x1={sx(hw)} y1={10} x2={sx(hw)} y2={18} stroke="var(--ink-faint)" strokeWidth="1" />
+        <text x={cx} y={11} textAnchor="middle" fontSize="8.5" fill="var(--ink-soft)" fontFamily="ui-monospace, monospace">
+          {(2 * hw).toFixed(3)}″ wide
+        </text>
+        {/* depth dimension */}
+        <text x={VIEW_W - 12} y={sy(depthIn) + 3} textAnchor="end" fontSize="8.5" fill="var(--ink-soft)" fontFamily="ui-monospace, monospace">
+          {depthIn.toFixed(3)}″ deep
+        </text>
+      </svg>
+      <div className="text-[10px] text-[var(--ink-faint)] text-center leading-relaxed">
+        Groove cross-section at max depth — exact scale
+      </div>
     </div>
   );
 }
@@ -447,6 +522,11 @@ export default function ControlPanel({
         <Segmented label="Bit Size" value={params.bitSize} options={BIT_SIZES} onChange={(v) => set('bitSize', v)} />
         <Segmented label="Bit Profile" value={params.bitProfile} options={BIT_PROFILES} onChange={(v) => set('bitProfile', v)} />
         <Segmented label="Max Carve Depth" value={params.carveDepth} options={CARVE_DEPTHS} onChange={(v) => set('carveDepth', v)} />
+        <BitDiagram
+          bitSizeIn={BIT_SIZE_IN[params.bitSize]}
+          depthIn={CARVE_DEPTH_IN[params.carveDepth]}
+          profile={params.bitProfile}
+        />
         {!isImage ? (
           <>
             <Segmented label="Depth Variation" value={params.depthMode} options={DEPTH_MODES} onChange={(v) => set('depthMode', v)} />
